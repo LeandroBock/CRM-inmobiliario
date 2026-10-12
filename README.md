@@ -388,7 +388,10 @@ ahí, copiar los archivos de un bucket al otro (por ejemplo con rclone) y cambia
 
 ### 4. WhatsApp y Claude
 
-En **crm-api → Environment** cargar `ANTHROPIC_API_KEY` y las `WHATSAPP_*`. En Meta, el webhook es
+En **crm-api → Environment** cargar las `WHATSAPP_*` y, si se quiere el asistente automático, `ANTHROPIC_API_KEY`.
+**Sin `ANTHROPIC_API_KEY` el asistente queda apagado:** los mensajes llegan al CRM, se crea el lead y el asesor
+recibe el aviso "Fulano te escribió"; al cliente no se le contesta nada automático (ni las respuestas fijas) hasta
+que responda una persona desde el CRM. Al cargar la clave, el asistente empieza a contestar solo. En Meta, el webhook es
 `https://crm-api.onrender.com/webhooks/whatsapp` y el *verify token* es el valor de `WHATSAPP_VERIFY_TOKEN` que
 generó Render (se ve en Environment).
 

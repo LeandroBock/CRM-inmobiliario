@@ -4,6 +4,12 @@ import { WhatsAppSendError } from '../src/modules/communication/infrastructure/w
 /** Claude simulado: devuelve las respuestas encoladas y guarda lo que recibió. */
 export class FakeLlm {
   calls: { system: string; history: LlmMessage[] }[] = [];
+  /** false = como si no hubiera ANTHROPIC_API_KEY (asistente apagado). */
+  configured = true;
+
+  isConfigured() {
+    return this.configured;
+  }
   private queue: (LlmReply | Error)[] = [];
 
   /** Próximas respuestas, en orden. Sin respuestas encoladas contesta "Respuesta de prueba". */
@@ -21,6 +27,7 @@ export class FakeLlm {
   reset() {
     this.calls = [];
     this.queue = [];
+    this.configured = true;
   }
 }
 

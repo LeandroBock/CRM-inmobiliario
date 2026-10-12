@@ -301,6 +301,20 @@ export class ConversationService implements OnApplicationBootstrap, OnModuleDest
     if (!unanswered.length) return; // ya se contestó (o lo contestó un asesor)
     const answeredUntil = unanswered.at(-1)!.createdAt.toISOString();
 
+    // Asistente apagado (sin clave de Claude): no se le manda nada al cliente; lo atiende el asesor desde el CRM.
+    if (!this.llm.isConfigured()) {
+      await this.notifications.notify(
+        NotificationType.CLIENTE_ESPERANDO,
+        `${this.nameOf(lead)} te escribió`,
+        excerpt(describe(unanswered.at(-1)!)),
+        lead.id,
+      );
+      lead.lastInteractionAt = new Date();
+      await this.leads.save(lead);
+      await this.rescore(lead.id);
+      return;
+    }
+
     const to = lead.phone.replace(/^\+/, '');
     // Audio que no se pudo escuchar, sticker, video...: si es lo único que mandó, respuesta fija sin gastar una llamada al LLM.
     const autoReplies = unanswered.map((c) => c.extractedData?.autoReply).filter((r): r is string => typeof r === 'string');

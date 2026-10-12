@@ -67,6 +67,11 @@ export class LlmClient {
     this.model = config.get('LLM_MODEL', 'claude-sonnet-5-5');
   }
 
+  /** Sin ANTHROPIC_API_KEY el asistente queda apagado: los mensajes de WhatsApp los contesta un asesor desde el CRM. */
+  isConfigured(): boolean {
+    return Boolean(this.config.get<string>('ANTHROPIC_API_KEY')?.trim());
+  }
+
   /** Se crea al primer uso: sin ANTHROPIC_API_KEY la API arranca igual y solo falla esta función. */
   private get client(): Anthropic {
     return (this.anthropic ??= new Anthropic({ apiKey: requiredSetting(this.config, 'ANTHROPIC_API_KEY') }));

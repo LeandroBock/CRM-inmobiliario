@@ -133,6 +133,50 @@ describe('Asistente de WhatsApp', () => {
     });
   });
 
+  describe('sin asistente (sin clave de Claude)', () => {
+    beforeEach(() => {
+      llm.configured = false;
+    });
+
+    it('no le manda nada al cliente: el mensaje queda en el CRM y le avisa al asesor', async () => {
+      await receive(text('Hola, ¿siguen alquilando el depto de Córdoba?', CLIENT, 'Juan'));
+      await receive(text('Es para mudarme en marzo'));
+
+      expect(llm.calls).toHaveLength(0);
+      expect(whatsapp.sent).toEqual([]);
+      const lead = (await leadByPhone())!;
+      expect((await chatOf(lead.id)).map((c) => c.role)).toEqual(['user', 'user']);
+
+      const waiting = (await notificationsOf(agent)).filter((n: { type: string }) => n.type === 'cliente_esperando');
+      expect(waiting).toEqual([expect.objectContaining({ title: 'Juan te escribió', body: 'Es para mudarme en marzo', leadId: lead.id })]);
+    });
+
+    it('tampoco manda las respuestas fijas (stickers, audios): las ve el asesor', async () => {
+      await receive({ wamid: `wamid.in.${++seq}`, from: CLIENT, kind: 'unsupported', type: 'sticker' });
+      expect(whatsapp.sent).toEqual([]);
+      const waiting = (await notificationsOf(agent)).filter((n: { type: string }) => n.type === 'cliente_esperando');
+      expect(waiting[0].body).toBe('[El cliente mandó un sticker]');
+    });
+
+    it('el asesor contesta desde el CRM normalmente', async () => {
+      await receive(text('Hola'));
+      const lead = (await leadByPhone())!;
+      await http(app).post(`/leads/${lead.id}/messages`).set(agent.auth).send({ text: 'Hola, soy Ana' }).expect(201);
+      expect(whatsapp.sent).toEqual([{ to: CLIENT, text: 'Hola, soy Ana' }]);
+    });
+
+    it('al cargar la clave, el asistente vuelve a contestar solo', async () => {
+      await receive(text('Hola'));
+      expect(whatsapp.sent).toEqual([]);
+      llm.configured = true;
+      llm.willReply({ text: '¡Hola! ¿Qué estás buscando?' });
+      await receive(text('Busco depto'));
+      expect(whatsapp.sent).toEqual([{ to: CLIENT, text: '¡Hola! ¿Qué estás buscando?' }]);
+      // Claude ve los dos mensajes juntos (los que nadie había contestado)
+      expect(llm.calls[0].history).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Hola' }, { type: 'text', text: 'Busco depto' }] }]);
+    });
+  });
+
   describe('mensajes seguidos', () => {
     const sendNow = (m: IncomingMessage) => conversation().handleIncoming(m); // sin esperar la respuesta
 
