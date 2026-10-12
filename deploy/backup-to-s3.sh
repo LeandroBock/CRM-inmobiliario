@@ -12,8 +12,14 @@ cd "$(dirname "$0")/.."
 KEEP_DAYS="${KEEP_DAYS:-30}"
 PG_IMAGE="${PG_IMAGE:-postgres:17.6-alpine}"
 
+# Al pegar la dirección en un panel es fácil que se cuelen espacios, saltos de línea, comillas o el "NOMBRE=" delante
+url="$(printf '%s' "$DATABASE_URL" | tr -d '\r\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^(BACKUP_)?DATABASE_URL=//; s/^["'"'"']//; s/["'"'"']$//')"
+if [[ ! "$url" =~ ^postgres(ql)?:// ]]; then
+  echo "ERROR: la dirección de la base tiene que empezar con postgresql:// (el valor cargado tiene ${#url} caracteres)." >&2
+  echo "Copiala de nuevo desde Supabase (Connect → Session pooler) con la contraseña en lugar de [YOUR-PASSWORD]." >&2
+  exit 1
+fi
 # Conexión cifrada salvo que la URL ya diga otra cosa (las bases en la nube la exigen)
-url="$DATABASE_URL"
 [[ "$url" == *sslmode=* ]] || url="${url}$([[ "$url" == *\?* ]] && echo '&' || echo '?')sslmode=require"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/crm-backup.XXXXXX")"
