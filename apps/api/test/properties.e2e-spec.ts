@@ -244,6 +244,73 @@ describe('Propiedades y tasación', () => {
     });
   });
 
+  describe('tasación por comparables', () => {
+    // Alrededor del Monumento a la Bandera (Rosario). ~0,001° de latitud ≈ 111 m.
+    const near = (i: number) => ({ lat: -32.9477 + i * 0.001, lng: -60.6304 });
+    const comps = (body: Record<string, unknown>) => http(app).post('/avo/comparables').set(user.auth).send(body);
+
+    it('usa las cercanas del mismo tipo y tamaño parecido, y explica cómo las eligió', async () => {
+      // 6 deptos de ~50 m² a menos de 1 km, entre 1.900 y 2.150 USD/m²
+      for (const [i, usd] of [95000, 97500, 100000, 100000, 102500, 107500].entries()) {
+        await create({ title: `Comparable ${i}`, coveredM2: 50, priceUsd: usd, ...near(i) }).expect(201);
+      }
+      await create({ title: 'Lejos', coveredM2: 50, priceUsd: 300000, lat: -32.99, lng: -60.70 }).expect(201); // ~10 km
+      await create({ title: 'Casa', type: 'casa', coveredM2: 50, priceUsd: 300000, ...near(1) }).expect(201);
+      await create({ title: 'Muy grande', coveredM2: 200, priceUsd: 300000, ...near(1) }).expect(201);
+      await create({ title: 'Pausada', status: 'pausada', coveredM2: 50, priceUsd: 300000, ...near(1) }).expect(201);
+      await create({ title: 'Alquiler', operation: 'alquiler', coveredM2: 50, priceUsd: 500, ...near(1) }).expect(201);
+      const target = (await create({ title: 'A tasar', coveredM2: 60, priceUsd: 1, ...near(0) }).expect(201)).body;
+
+      const res = await comps({ propertyId: target.id }).expect(200);
+      expect(res.body.comparables.map((c: { title: string }) => c.title)).toEqual([
+        'Comparable 0', 'Comparable 1', 'Comparable 2', 'Comparable 3', 'Comparable 4', 'Comparable 5',
+      ]); // ordenadas por distancia; sin la propia propiedad
+      expect(res.body.estimate).toMatchObject({ pricePerM2Usd: 2000, estimatedPriceUsd: 120_000, used: 6 });
+      expect(res.body.criteria).toBe('6 departamentos en venta, a menos de 1 km, de 42 a 84 m² cubiertos, publicadas en los últimos 24 meses');
+      expect(res.body.comparables[0].distanceM).toBeLessThan(50);
+      expect(res.body.warning).toBeNull();
+    });
+
+    it('sin ubicación, busca en el mismo barrio (sin importar mayúsculas)', async () => {
+      for (const usd of [90000, 100000, 110000, 100000, 100000]) await create({ coveredM2: 50, priceUsd: usd, neighborhood: 'Echesortu' }).expect(201);
+      await create({ coveredM2: 50, priceUsd: 500000, neighborhood: 'Fisherton' }).expect(201);
+      const res = await comps({ type: 'departamento', neighborhood: 'echesortu', coveredM2: 50 }).expect(200);
+      expect(res.body.comparables).toHaveLength(5);
+      expect(res.body.estimate.estimatedPriceUsd).toBe(100_000);
+      expect(res.body.criteria).toContain('en el mismo barrio');
+    });
+
+    it('si hay pocas cerca, amplía la búsqueda y lo avisa', async () => {
+      for (const i of [0, 1, 2]) await create({ coveredM2: 50, priceUsd: 100000, ...near(i) }).expect(201);
+      for (const i of [15, 16, 17]) await create({ coveredM2: 50, priceUsd: 100000, ...near(i) }).expect(201); // ~1,7 km
+      const res = await comps({ type: 'departamento', coveredM2: 50, ...near(0) }).expect(200);
+      expect(res.body.comparables).toHaveLength(6);
+      expect(res.body.warning).toMatch(/se amplió la búsqueda \(a menos de 2 km\)/);
+    });
+
+    it('marca las publicaciones con precios fuera de lo normal y no las usa', async () => {
+      for (const usd of [100000, 98000, 102000, 99000, 101000]) await create({ coveredM2: 50, priceUsd: usd, neighborhood: 'Centro' }).expect(201);
+      await create({ title: 'Mal cargada', coveredM2: 50, priceUsd: 1_000_000, neighborhood: 'Centro' }).expect(201);
+      const res = await comps({ type: 'departamento', neighborhood: 'Centro', coveredM2: 50 }).expect(200);
+      expect(res.body.comparables.find((c: { title: string }) => c.title === 'Mal cargada').outlier).toBe(true);
+      expect(res.body.estimate.estimatedPriceUsd).toBe(100_000);
+    });
+
+    it('con menos de 3 comparables no inventa un valor: lo explica', async () => {
+      await create({ coveredM2: 50, priceUsd: 100000, neighborhood: 'Centro' }).expect(201);
+      const res = await comps({ type: 'departamento', neighborhood: 'Centro', coveredM2: 50 }).expect(200);
+      expect(res.body.estimate).toBeNull();
+      expect(res.body.warning).toMatch(/solo 1 propiedad comparable.*al menos 3/);
+    });
+
+    it('valida lo mínimo para tasar', async () => {
+      await comps({ neighborhood: 'Centro', coveredM2: 50 }).expect(400); // sin tipo
+      await comps({ type: 'casa', neighborhood: 'Centro' }).expect(400); // sin superficie
+      await comps({ type: 'casa', coveredM2: 50 }).expect(400); // sin ubicación ni barrio
+      await comps({ propertyId: '00000000-0000-4000-8000-000000000000' }).expect(404);
+    });
+  });
+
   it('cualquier usuario logueado puede cargar propiedades; sin sesión no', async () => {
     const admin = await createUser(app, UserRole.ADMIN);
     await http(app).post('/properties').set(admin.auth).send({ ...base, priceUsd: 1 }).expect(201);

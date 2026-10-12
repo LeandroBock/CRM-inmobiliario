@@ -93,3 +93,42 @@ export function parseAmount(raw: string): number | null {
   if (/^\d+\.\d+$/.test(s)) return Number(s);
   return NaN;
 }
+
+/** Tasación por comparables (POST /avo/comparables). */
+export interface ComparablesRequest {
+  propertyId?: string;
+  type?: string;
+  operation?: string;
+  neighborhood?: string;
+  city?: string;
+  coveredM2?: number;
+  lat?: number;
+  lng?: number;
+}
+
+export interface Comparable {
+  id: string;
+  title: string;
+  neighborhood: string;
+  status: string;
+  coveredM2: number;
+  priceUsd: number;
+  pricePerM2Usd: number;
+  distanceM: number | null;
+  outlier: boolean;
+}
+
+export interface ComparablesResult {
+  target: { type: string; operation: string; coveredM2: number; neighborhood: string | null; city: string | null };
+  criteria: string;
+  estimate: {
+    pricePerM2Usd: number;
+    estimatedPriceUsd: number;
+    rangeLowUsd: number;
+    rangeHighUsd: number;
+    confidence: 'alta' | 'media' | 'baja';
+    used: number;
+  } | null;
+  comparables: Comparable[];
+  warning: string | null;
+}

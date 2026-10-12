@@ -11,6 +11,7 @@ import {
   type Paginated,
   type Property,
 } from '../api/properties';
+import Appraisal from '../components/Appraisal';
 import Modal from '../components/Modal';
 import PropertyForm from '../components/PropertyForm';
 import { btnLink, btnPrimary, btnSecondary, card, colors, input } from '../styles';
@@ -32,6 +33,8 @@ export default function Properties() {
   const [queryInput, setQueryInput] = useState(''); // lo que se está escribiendo
   const [reload, setReload] = useState(0);
   const [editing, setEditing] = useState<Property | 'new' | null>(null);
+  /** Tasación abierta: una propiedad cargada, o 'nueva' para tasar algo que no está en el CRM. */
+  const [appraising, setAppraising] = useState<Property | 'nueva' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,9 +93,14 @@ export default function Properties() {
     <main style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 1100, margin: '0 auto', padding: 24 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>Propiedades</h1>
-        <button style={btnPrimary} onClick={() => setEditing('new')}>
-          + Nueva propiedad
-        </button>
+        <span style={{ display: 'flex', gap: 8 }}>
+          <button style={btnSecondary} onClick={() => setAppraising('nueva')}>
+            Tasar
+          </button>
+          <button style={btnPrimary} onClick={() => setEditing('new')}>
+            + Nueva propiedad
+          </button>
+        </span>
       </header>
 
       <form onSubmit={search} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -198,6 +206,10 @@ export default function Properties() {
                   <Chip status={p.status}>{labelOf(STATUSES, p.status)}</Chip>
                 </td>
                 <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  <button style={btnLink} onClick={() => setAppraising(p)}>
+                    Tasar
+                  </button>
+                  {' · '}
                   <button style={btnLink} onClick={() => setEditing(p)}>
                     Editar
                   </button>
@@ -224,6 +236,12 @@ export default function Properties() {
             Siguiente →
           </button>
         </div>
+      )}
+
+      {appraising !== null && (
+        <Modal title="Tasación" onClose={() => setAppraising(null)}>
+          <Appraisal property={appraising === 'nueva' ? null : appraising} onClose={() => setAppraising(null)} />
+        </Modal>
       )}
 
       {editing !== null && (

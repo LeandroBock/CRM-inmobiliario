@@ -215,6 +215,16 @@ npm test                  # desde la raíz (o npm test -w apps/api)
 
 Correrlos antes de cada deploy: si algo falla, no subir.
 
+## Tasación por comparables
+
+En **Propiedades**, el botón **Tasar** (arriba, para algo que no está cargado) o **Tasar** en cada fila. Busca
+propiedades parecidas del CRM (mismo tipo y operación, superficie parecida, publicadas en los últimos 24 meses) a
+menos de 1 km si la propiedad tiene ubicación (o en el mismo barrio), y amplía la búsqueda si hay pocas. Muestra el
+valor estimado (mediana del USD/m² × m²), un rango, la confianza y las comparables usadas; descarta precios fuera de
+lo normal. Con menos de 3 comparables no estima. Mejora a medida que se cargan propiedades (con ubicación).
+Endpoint: `POST /avo/comparables`. El modelo de tasación en Python (`/avo/appraise`) sigue disponible para cuando
+haya datos para entrenarlo.
+
 ## Google Calendar (un calendario por asesor)
 
 Cada asesor conecta su cuenta desde **Agenda → Conectar**. Desde ese momento, las visitas pendientes y confirmadas
