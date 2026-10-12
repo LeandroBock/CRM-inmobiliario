@@ -1,6 +1,7 @@
 # Backup diario de la base (Supabase) al bucket privado (Supabase Storage o R2). Ver README > Deploy en Render + Supabase > Backups.
-# Secretos necesarios (Settings → Secrets and variables → Actions): BACKUP_DATABASE_URL, S3_ENDPOINT,
-# S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_PRIVATE_BUCKET.
+# Secretos necesarios (Settings → Secrets and variables → Actions → pestaña Secrets → Repository secrets):
+# BACKUP_DATABASE_URL, S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY.
+# S3_PRIVATE_BUCKET es opcional (secreto o variable); si no está, se usa CRM-privado.
 name: Backup de la base
 
 on:
@@ -28,13 +29,26 @@ jobs:
       # Solo el SDK de S3 (lo usa deploy/backup-bucket.mjs); sin scripts de instalación (sharp no hace falta acá)
       - run: npm ci -w apps/api --ignore-scripts --no-audit --no-fund
       - name: Backup al bucket privado
-        run: deploy/backup-to-s3.sh
+        run: |
+          # Qué secretos llegaron (sin mostrar los valores)
+          missing=0
+          for name in BACKUP_DATABASE_URL S3_ENDPOINT S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            var="CHECK_$name"
+            if [ -n "${!var}" ]; then echo "✔ $name"; else echo "✘ $name: falta (Settings → Secrets and variables → Actions → Secrets → New repository secret)"; missing=1; fi
+          done
+          echo "Bucket: $S3_PRIVATE_BUCKET"
+          [ "$missing" = 0 ] || exit 1
+          deploy/backup-to-s3.sh
         env:
+          CHECK_BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          CHECK_S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          CHECK_S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          CHECK_S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
           S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          S3_PRIVATE_BUCKET: ${{ secrets.S3_PRIVATE_BUCKET }}
+          S3_PRIVATE_BUCKET: ${{ secrets.S3_PRIVATE_BUCKET || vars.S3_PRIVATE_BUCKET || 'CRM-privado' }}
           # Supabase Storage: la región del proyecto y path style. (Con R2: S3_REGION auto y S3_FORCE_PATH_STYLE false.)
           S3_REGION: us-east-1
           S3_FORCE_PATH_STYLE: "true"

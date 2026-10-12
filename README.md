@@ -397,8 +397,9 @@ Supabase gratis no hace backups. `.github/workflows/backup-db.yml` hace uno por 
 `crm-privado/backups/` (Supabase Storage) y guarda 30 días.
 
 1. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**, uno por cada uno:
-   `BACKUP_DATABASE_URL` (la misma `DATABASE_URL`), `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
-   `S3_PRIVATE_BUCKET`.
+   `BACKUP_DATABASE_URL` (la misma `DATABASE_URL`), `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
+   Van en la pestaña **Secrets** (no Variables) como **Repository secrets**. El bucket es `CRM-privado` salvo que se
+   cargue otro en `S3_PRIVATE_BUCKET`.
 2. **Actions → Backup de la base → Run workflow** para probarlo, y confirmar en Supabase (Storage → crm-privado →
    backups) que apareció el archivo.
    Si alguna vez falla, GitHub te avisa por email.
