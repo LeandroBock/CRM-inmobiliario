@@ -3,12 +3,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Paginated } from '../../../shared/domain/pagination';
 import { Property } from '../../properties/domain/property.entity';
-import { PostFormat, PostStatus, SocialPlatform, SocialPost } from '../domain/social-post.entity';
+import { isVideoUrl, VIDEO_STORAGE, VideoStorage } from '../../media/domain/video-storage.port';
+import { PlatformOptions, PostFormat, PostStatus, SocialPlatform, SocialPost } from '../domain/social-post.entity';
 import { SOCIAL_PUBLISHERS, SocialPublisher } from '../domain/social-publisher.interface';
 import { captionOf, MAX_PHOTOS_PER_POST } from '../infrastructure/meta.publisher';
+import { TikTokAuthService } from '../infrastructure/tiktok/tiktok-auth.service';
 
-/** Redes que se pueden usar desde la pantalla de publicaciones (TikTok y LinkedIn: más adelante, con video). */
-export const SUPPORTED_PLATFORMS = [SocialPlatform.FACEBOOK, SocialPlatform.INSTAGRAM];
+/** Redes que se pueden usar desde la pantalla de publicaciones (LinkedIn: más adelante). */
+export const SUPPORTED_PLATFORMS = [SocialPlatform.FACEBOOK, SocialPlatform.INSTAGRAM, SocialPlatform.TIKTOK];
+
+const TIKTOK_PRIVACY = ['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR', 'SELF_ONLY'];
+const NAMES: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
 
 const MAX_CAPTION = 2200; // límite de Instagram (Facebook acepta más)
 const MAX_HASHTAGS = 30; // límite de Instagram
@@ -21,6 +26,7 @@ export interface PostInput {
   mediaUrls?: string[];
   propertyId?: string | null;
   scheduledAt?: Date | null;
+  platformOptions?: PlatformOptions;
 }
 
 export interface PostQuery {
@@ -46,11 +52,16 @@ export class SocialPostsService {
     @InjectRepository(SocialPost) private readonly posts: Repository<SocialPost>,
     @InjectRepository(Property) private readonly properties: Repository<Property>,
     @Inject(SOCIAL_PUBLISHERS) private readonly publishers: SocialPublisher[],
+    @Inject(VIDEO_STORAGE) private readonly videos: VideoStorage,
+    private readonly tiktok: TikTokAuthService,
   ) {}
 
-  /** Qué redes tienen sus claves cargadas (para habilitarlas en la pantalla). */
-  status(): Record<string, boolean> {
-    return Object.fromEntries(SUPPORTED_PLATFORMS.map((p) => [p, Boolean(this.publishers.find((x) => x.platform === p)?.isConfigured())]));
+  /** Qué redes están listas para publicar (claves cargadas; TikTok, además, con la cuenta conectada). */
+  async status(): Promise<Record<string, boolean>> {
+    const out: Record<string, boolean> = {};
+    for (const p of SUPPORTED_PLATFORMS) out[p] = Boolean(this.publishers.find((x) => x.platform === p)?.isConfigured());
+    out.tiktok = out.tiktok && (await this.tiktok.account()) !== null;
+    return out;
   }
 
   async list(q: PostQuery): Promise<Paginated<SocialPost>> {
@@ -80,7 +91,7 @@ export class SocialPostsService {
     const property = await this.property(input.propertyId);
 
     const drafts = unique.map((platform) => {
-      const post = this.posts.create({ platform, copy: '', hashtags: [], mediaUrls: [], status: PostStatus.BORRADOR });
+      const post = this.posts.create({ platform, copy: '', hashtags: [], mediaUrls: [], platformOptions: {}, status: PostStatus.BORRADOR });
       this.apply(post, input, property);
       return post;
     });
@@ -118,7 +129,25 @@ export class SocialPostsService {
     if (input.hashtags !== undefined) post.hashtags = normalizeHashtags(input.hashtags);
     if (input.mediaUrls !== undefined) post.mediaUrls = [...new Set(input.mediaUrls.map((u) => u.trim()).filter(Boolean))];
     post.property = property ?? (null as unknown as undefined); // null = sacarle la propiedad
-    post.format = post.mediaUrls.length > 1 ? PostFormat.CARRUSEL : post.mediaUrls.length === 1 ? PostFormat.IMAGEN : PostFormat.TEXTO;
+    if (input.platformOptions !== undefined && post.platform === SocialPlatform.TIKTOK) {
+      const o = input.platformOptions;
+      post.platformOptions = {
+        privacyLevel: o.privacyLevel,
+        disableComment: Boolean(o.disableComment),
+        disableDuet: Boolean(o.disableDuet),
+        disableStitch: Boolean(o.disableStitch),
+      };
+    }
+    const video = post.mediaUrls.length === 1 && isVideoUrl(post.mediaUrls[0]);
+    post.format = video
+      ? post.platform === SocialPlatform.INSTAGRAM
+        ? PostFormat.REEL
+        : PostFormat.VIDEO
+      : post.mediaUrls.length > 1
+        ? PostFormat.CARRUSEL
+        : post.mediaUrls.length === 1
+          ? PostFormat.IMAGEN
+          : PostFormat.TEXTO;
 
     if (input.scheduledAt !== undefined) {
       if (input.scheduledAt === null) {
@@ -132,17 +161,32 @@ export class SocialPostsService {
     } else if (post.status === PostStatus.FALLIDO) {
       post.status = post.scheduledAt && post.scheduledAt.getTime() > Date.now() ? PostStatus.PROGRAMADO : PostStatus.BORRADOR;
     }
+    this.validateForPlatform(post);
+  }
+
+  /** Reglas de cada red, para que el error aparezca al guardar y no recién al publicar. */
+  private validateForPlatform(post: SocialPost): void {
     validateForPlatform(post);
+    if (post.platform === SocialPlatform.TIKTOK) {
+      if (!this.videos.fileNameFromUrl(post.mediaUrls[0])) throw new BadRequestException('TikTok: el video tiene que estar subido al CRM (no sirve un link externo)');
+      const privacy = post.platformOptions?.privacyLevel;
+      if (!privacy || !TIKTOK_PRIVACY.includes(privacy)) throw new BadRequestException('TikTok: elegí quién puede ver la publicación');
+    }
   }
 }
 
-/** Reglas de cada red, para que el error aparezca al guardar y no recién al publicar. */
+/** Reglas generales de cada red (sin depender del almacenamiento). */
 export function validateForPlatform(post: Pick<SocialPost, 'platform' | 'copy' | 'hashtags' | 'mediaUrls'>): void {
-  const name = post.platform === SocialPlatform.INSTAGRAM ? 'Instagram' : 'Facebook';
+  const name = NAMES[post.platform] ?? post.platform;
+  const videos = post.mediaUrls.filter(isVideoUrl);
+  if (videos.length && post.mediaUrls.length > 1) throw new BadRequestException(`${name}: un video por publicación, sin fotos`);
   if (post.mediaUrls.length > MAX_PHOTOS_PER_POST) throw new BadRequestException(`${name}: hasta ${MAX_PHOTOS_PER_POST} fotos por publicación`);
-  if (post.mediaUrls.some((u) => !/^https:\/\//i.test(u))) throw new BadRequestException(`${name}: las fotos tienen que tener un link público https://`);
-  if (post.platform === SocialPlatform.INSTAGRAM) {
-    if (!post.mediaUrls.length) throw new BadRequestException('Instagram: hace falta al menos una foto');
+  if (post.mediaUrls.some((u) => !/^https:\/\//i.test(u))) throw new BadRequestException(`${name}: las fotos y videos tienen que tener un link público https://`);
+  if (post.platform === SocialPlatform.TIKTOK) {
+    if (videos.length !== 1) throw new BadRequestException('TikTok: hace falta un video');
+    if (captionOf(post).length > MAX_CAPTION) throw new BadRequestException(`TikTok: el texto con los hashtags no puede pasar de ${MAX_CAPTION} caracteres`);
+  } else if (post.platform === SocialPlatform.INSTAGRAM) {
+    if (!post.mediaUrls.length) throw new BadRequestException('Instagram: hace falta una foto o un video');
     if (post.hashtags.length > MAX_HASHTAGS) throw new BadRequestException(`Instagram: hasta ${MAX_HASHTAGS} hashtags`);
     if (captionOf(post).length > MAX_CAPTION) throw new BadRequestException(`Instagram: el texto con los hashtags no puede pasar de ${MAX_CAPTION} caracteres`);
   } else if (!post.copy && !post.mediaUrls.length) {

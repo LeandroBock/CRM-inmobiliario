@@ -2,6 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { isVideoUrl } from '../../media/domain/video-storage.port';
 import { graphBase, graphErrorMessage } from '../../../shared/infrastructure/meta-graph';
 import { requiredSetting } from '../../../shared/infrastructure/required-setting';
 import { SocialPlatform, SocialPost } from '../domain/social-post.entity';
@@ -91,9 +92,12 @@ export abstract class MetaGraphClient {
 @Injectable()
 export class InstagramPublisher extends MetaGraphClient implements SocialPublisher {
   readonly platform = SocialPlatform.INSTAGRAM;
-  /** Cuánto se espera a que Instagram termine de procesar las fotos antes de publicar. */
+  /** Cuánto se espera a que Instagram termine de procesar las fotos (o el video) antes de publicar. */
   protected readyPollMs = 2000;
   protected readyAttempts = 15;
+  /** Un Reel tarda más: hasta ~5 minutos. */
+  protected videoPollMs = 5000;
+  protected videoAttempts = 60;
 
   constructor(http: HttpService, config: ConfigService) {
     super(http, config);
@@ -106,14 +110,18 @@ export class InstagramPublisher extends MetaGraphClient implements SocialPublish
 
   async publish(post: SocialPost): Promise<PublishResult> {
     const photos = post.mediaUrls ?? [];
-    if (!photos.length) throw new Error('Instagram necesita al menos una foto');
+    if (!photos.length) throw new Error('Instagram necesita una foto o un video');
     if (photos.length > MAX_PHOTOS_PER_POST) throw new Error(`Instagram acepta hasta ${MAX_PHOTOS_PER_POST} fotos`);
     const caption = captionOf(post);
     const ig = await this.instagramAccount();
 
-    // 1) "Contenedor" con las fotos. En carrusel, primero uno por foto y después el que las agrupa.
+    // 1) "Contenedor" con las fotos o el video. En carrusel, primero uno por foto y después el que las agrupa.
     let containerId: string;
-    if (photos.length === 1) {
+    if (photos.length === 1 && isVideoUrl(photos[0])) {
+      // Video = Reel (también se muestra en el feed)
+      containerId = (await this.post<{ id: string }>(`${ig}/media`, { media_type: 'REELS', video_url: photos[0], caption, share_to_feed: 'true' })).id;
+      await this.waitReady(containerId, this.videoPollMs, this.videoAttempts);
+    } else if (photos.length === 1) {
       containerId = (await this.post<{ id: string }>(`${ig}/media`, { image_url: photos[0], caption })).id;
     } else {
       const children: string[] = [];
@@ -123,7 +131,7 @@ export class InstagramPublisher extends MetaGraphClient implements SocialPublish
       for (const id of children) await this.waitReady(id);
       containerId = (await this.post<{ id: string }>(`${ig}/media`, { media_type: 'CAROUSEL', children: children.join(','), caption })).id;
     }
-    await this.waitReady(containerId);
+    if (!isVideoUrl(photos[0])) await this.waitReady(containerId);
 
     // 2) Publicar y pedir el link
     const { id } = await this.post<{ id: string }>(`${ig}/media_publish`, { creation_id: containerId });
@@ -134,16 +142,19 @@ export class InstagramPublisher extends MetaGraphClient implements SocialPublish
   }
 
   /** Instagram baja y procesa cada foto: hay que esperar a que el contenedor esté FINISHED. */
-  private async waitReady(containerId: string): Promise<void> {
-    for (let i = 0; i < this.readyAttempts; i++) {
+  private async waitReady(containerId: string, pollMs = this.readyPollMs, attempts = this.readyAttempts): Promise<void> {
+    for (let i = 0; i < attempts; i++) {
       const { status_code, status } = await this.get<{ status_code?: string; status?: string }>(containerId, { fields: 'status_code,status' });
       if (!status_code || status_code === 'FINISHED' || status_code === 'PUBLISHED') return;
       if (status_code === 'ERROR' || status_code === 'EXPIRED') {
-        throw new Error(`Instagram no pudo procesar la foto${status ? ` (${status})` : ''}. Las fotos tienen que ser JPG y tener un link público.`);
+        throw new Error(
+          `Instagram no pudo procesar el archivo${status ? ` (${status})` : ''}. Las fotos tienen que ser JPG; los videos, MP4 o MOV ` +
+            'vertical (9:16), de 3 segundos a 15 minutos, y todo con link público.',
+        );
       }
-      await new Promise((r) => setTimeout(r, this.readyPollMs));
+      await new Promise((r) => setTimeout(r, pollMs));
     }
-    throw new Error('Instagram tardó demasiado en procesar las fotos. Probá de nuevo en unos minutos.');
+    throw new Error('Instagram tardó demasiado en procesar el archivo. Probá de nuevo en unos minutos.');
   }
 
   async fetchMetrics(externalId: string): Promise<PostMetrics> {
@@ -180,7 +191,10 @@ export class FacebookPublisher extends MetaGraphClient implements SocialPublishe
     if (!message && !photos.length) throw new Error('La publicación está vacía');
 
     let postId: string;
-    if (photos.length === 0) {
+    if (photos.length === 1 && isVideoUrl(photos[0])) {
+      // Facebook lo baja de la URL y lo procesa por su cuenta
+      postId = (await this.post<{ id: string }>(`${this.pageId}/videos`, { file_url: photos[0], description: message })).id;
+    } else if (photos.length === 0) {
       postId = (await this.post<{ id: string }>(`${this.pageId}/feed`, { message })).id;
     } else if (photos.length === 1) {
       const r = await this.post<{ id: string; post_id?: string }>(`${this.pageId}/photos`, { url: photos[0], caption: message });
@@ -195,7 +209,8 @@ export class FacebookPublisher extends MetaGraphClient implements SocialPublishe
       postId = (await this.post<{ id: string }>(`${this.pageId}/feed`, { message, ...attached })).id;
     }
     const url = await this.get<{ permalink_url?: string }>(postId, { fields: 'permalink_url' })
-      .then((r) => r.permalink_url ?? null)
+      // En videos, Meta devuelve una ruta ("/reel/123"): se completa con el dominio
+      .then((r) => (r.permalink_url ? new URL(r.permalink_url, 'https://www.facebook.com').toString() : null))
       .catch(() => null);
     return { externalId: postId, publishedAt: new Date(), url };
   }

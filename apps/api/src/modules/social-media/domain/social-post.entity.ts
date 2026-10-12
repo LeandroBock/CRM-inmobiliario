@@ -25,6 +25,13 @@ export enum PostFormat {
   TEXTO = 'texto',
 }
 
+export interface PlatformOptions {
+  privacyLevel?: string;
+  disableComment?: boolean;
+  disableDuet?: boolean;
+  disableStitch?: boolean;
+}
+
 @Entity('social_posts')
 @Index(['platform', 'status', 'scheduledAt'])
 export class SocialPost {
@@ -45,6 +52,9 @@ export class SocialPost {
   @Column({ type: 'text', nullable: true }) script?: string; // guion para reels/TikTok
   @Column({ type: 'jsonb', default: () => "'[]'" }) hashtags: string[];
   @Column({ name: 'media_urls', type: 'jsonb', default: () => "'[]'" }) mediaUrls: string[];
+
+  /** Opciones propias de la red. TikTok: privacidad elegida por el usuario y si se permiten comentarios, dúos y stitch. */
+  @Column({ name: 'platform_options', type: 'jsonb', default: () => "'{}'" }) platformOptions: PlatformOptions;
 
   @Column({ type: 'enum', enum: PostStatus, default: PostStatus.BORRADOR })
   status: PostStatus;

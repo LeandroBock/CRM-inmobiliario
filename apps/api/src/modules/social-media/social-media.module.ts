@@ -5,6 +5,10 @@ import { AvoModule } from '../avo/avo.module';
 import { Property } from '../properties/domain/property.entity';
 import { ContentService } from './application/content.service';
 import { PostingTimeOptimizer } from './application/posting-time.optimizer';
+import { MediaModule } from '../media/media.module';
+import { TikTokAccount } from './domain/tiktok-account.entity';
+import { TikTokAuthService } from './infrastructure/tiktok/tiktok-auth.service';
+import { TikTokController } from './presentation/tiktok.controller';
 import { SocialPostsService } from './application/social-posts.service';
 import { PublishingService } from './application/publishing.service';
 import { SOCIAL_PUBLISHERS } from './domain/social-publisher.interface';
@@ -15,13 +19,14 @@ import { TikTokPublisher } from './infrastructure/tiktok.publisher';
 import { SocialMediaController } from './presentation/social-media.controller';
 
 @Module({
-  imports: [HttpModule, AvoModule, TypeOrmModule.forFeature([SocialPost, Property])],
-  controllers: [SocialMediaController],
+  imports: [HttpModule, AvoModule, MediaModule, TypeOrmModule.forFeature([SocialPost, Property, TikTokAccount])],
+  controllers: [SocialMediaController, TikTokController],
   providers: [
     ContentService,
     PostingTimeOptimizer,
     PublishingService,
     SocialPostsService,
+    TikTokAuthService,
     InstagramPublisher,
     FacebookPublisher,
     LinkedInPublisher,

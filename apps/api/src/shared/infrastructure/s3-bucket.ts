@@ -1,6 +1,9 @@
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
   PutObjectCommand,
@@ -80,6 +83,39 @@ export class S3Bucket {
       await this.client.send(new PutObjectCommand({ Bucket: this.name, Key: key, Body: body, ContentType: contentType, CacheControl: cacheControl }));
     } catch (err) {
       throw this.wrap('Subir', err);
+    }
+  }
+
+  /** Sube un archivo del disco sin cargarlo entero en memoria (videos). */
+  async putFile(key: string, filePath: string, contentType: string, cacheControl?: string): Promise<void> {
+    const { size } = await stat(filePath);
+    try {
+      await this.client.send(
+        new PutObjectCommand({ Bucket: this.name, Key: key, Body: createReadStream(filePath), ContentLength: size, ContentType: contentType, CacheControl: cacheControl }),
+      );
+    } catch (err) {
+      throw this.wrap('Subir', err);
+    }
+  }
+
+  /** Tamaño en bytes, o null si no existe. */
+  async size(key: string): Promise<number | null> {
+    try {
+      return (await this.client.send(new HeadObjectCommand({ Bucket: this.name, Key: key }))).ContentLength ?? null;
+    } catch (err) {
+      const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (e.name === 'NotFound' || e.$metadata?.httpStatusCode === 404) return null;
+      throw this.wrap('Consultar', err);
+    }
+  }
+
+  /** Un tramo del archivo (bytes start..end inclusive), para mandarlo por partes sin cargarlo entero. */
+  async getRange(key: string, start: number, end: number): Promise<Buffer> {
+    try {
+      const res = await this.client.send(new GetObjectCommand({ Bucket: this.name, Key: key, Range: `bytes=${start}-${end}` }));
+      return Buffer.from(await res.Body!.transformToByteArray());
+    } catch (err) {
+      throw this.wrap('Leer', err);
     }
   }
 

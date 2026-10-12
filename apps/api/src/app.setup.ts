@@ -43,13 +43,16 @@ export function configureApp(app: NestExpressApplication): void {
   const origins = webOrigins(process.env.WEB_ORIGIN);
   app.enableCors({ origin: origins.length === 1 ? origins[0] : origins });
   // Fotos de propiedades: públicas (las ven portales y redes). Los nombres son UUID, no se pueden adivinar ni listar.
-  // Solo se publica uploads/photos: el resto de uploads (p. ej. chat-media, audios y fotos de clientes) es privado.
-  app.useStaticAssets(join(uploadsDir(), 'photos'), {
-    prefix: `${UPLOADS_ROUTE}/photos/`,
-    index: false,
-    dotfiles: 'deny',
-    maxAge: '30d',
-    immutable: true, // un archivo nunca cambia: cada subida genera un nombre nuevo
-    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
-  });
+  // Solo se publican uploads/photos y uploads/videos: el resto (p. ej. chat-media, audios y fotos de clientes) es privado.
+  // Lo mismo para los videos de redes (Meta los descarga desde su URL). express.static acepta pedidos por rangos.
+  for (const folder of ['photos', 'videos']) {
+    app.useStaticAssets(join(uploadsDir(), folder), {
+      prefix: `${UPLOADS_ROUTE}/${folder}/`,
+      index: false,
+      dotfiles: 'deny',
+      maxAge: '30d',
+      immutable: true, // un archivo nunca cambia: cada subida genera un nombre nuevo
+      setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+    });
+  }
 }

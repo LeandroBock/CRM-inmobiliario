@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -10,9 +10,11 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsIn,
   IsUUID,
   MaxLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { PaginationQuery } from '../../../shared/domain/pagination';
 import { ContentService } from '../application/content.service';
@@ -20,6 +22,7 @@ import { PostingTimeOptimizer } from '../application/posting-time.optimizer';
 import { PublishingService } from '../application/publishing.service';
 import { SocialPostsService } from '../application/social-posts.service';
 import { PostStatus, SocialPlatform } from '../domain/social-post.entity';
+import { TikTokAuthService } from '../infrastructure/tiktok/tiktok-auth.service';
 
 class GenerateDto {
   @IsEnum(SocialPlatform) platform: SocialPlatform;
@@ -28,14 +31,23 @@ class GenerateDto {
   @IsOptional() @IsBoolean() scheduleAuto?: boolean;
 }
 
+class PlatformOptionsDto {
+  @IsOptional() @IsIn(['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR', 'SELF_ONLY']) privacyLevel?: string;
+  @IsOptional() @IsBoolean() disableComment?: boolean;
+  @IsOptional() @IsBoolean() disableDuet?: boolean;
+  @IsOptional() @IsBoolean() disableStitch?: boolean;
+}
+
 class PostContentDto {
   @IsOptional() @IsString() @MaxLength(5000) copy?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(60) @IsString({ each: true }) hashtags?: string[];
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10, { message: 'Hasta 10 fotos por publicación' })
-  @IsUrl({ protocols: ['https'], require_protocol: true }, { each: true, message: 'Las fotos tienen que tener un link https://' })
+  @IsUrl({ protocols: ['https'], require_protocol: true, require_tld: false }, { each: true, message: 'Las fotos y videos tienen que tener un link https://' })
   mediaUrls?: string[];
+  /** Opciones de TikTok (privacidad elegida por el usuario, comentarios, dúos, stitch). */
+  @IsOptional() @ValidateNested() @Type(() => PlatformOptionsDto) platformOptions?: PlatformOptionsDto;
   /** null = sin propiedad asociada */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() propertyId?: string | null;
   /** Fecha y hora para publicar sola (ISO con zona). null = sacar la programación (vuelve a borrador). */
@@ -55,6 +67,9 @@ class PostListQuery extends PaginationQuery {
   @IsOptional() @IsEnum(SocialPlatform) platform?: SocialPlatform;
 }
 
+/** Cuánto espera "publicar ya" antes de responder y seguir en segundo plano. */
+const PUBLISH_WAIT_MS = Number(process.env.PUBLISH_WAIT_MS ?? 25_000);
+
 @Controller('social')
 export class SocialMediaController {
   constructor(
@@ -62,12 +77,21 @@ export class SocialMediaController {
     private readonly publishing: PublishingService,
     private readonly optimizer: PostingTimeOptimizer,
     private readonly socialPosts: SocialPostsService,
+    private readonly tiktok: TikTokAuthService,
   ) {}
 
-  /** Qué redes están configuradas en el servidor. */
+  /** Qué redes están listas para publicar. */
   @Get('status')
   status() {
     return this.socialPosts.status();
+  }
+
+  /** Cuenta de TikTok conectada y sus opciones de publicación (TikTok exige mostrarlas antes de publicar). */
+  @Get('tiktok/creator-info')
+  tiktokCreatorInfo() {
+    return this.tiktok.creatorInfo().catch((err: Error) => {
+      throw new ServiceUnavailableException(err.message);
+    });
   }
 
   @Get('posts')
@@ -99,11 +123,19 @@ export class SocialMediaController {
     await this.socialPosts.remove(id);
   }
 
-  /** Publicar ya (ignora el horario programado). */
+  /**
+   * Publicar ya (ignora el horario programado). Las fotos salen en segundos; un video puede tardar minutos en
+   * procesarse: pasados ~25 s se responde con la publicación en "publicando" y termina sola (la pantalla se actualiza).
+   */
   @Post('posts/:id/publish')
   @HttpCode(200)
   async publishNow(@Param('id', ParseUUIDPipe) id: string) {
-    return this.publishing.publishOne(await this.socialPosts.findOne(id));
+    const publishing = this.publishing.publishOne(await this.socialPosts.findOne(id));
+    const slow = new Promise<null>((r) => setTimeout(() => r(null), PUBLISH_WAIT_MS).unref());
+    const done = await Promise.race([publishing, slow]);
+    if (done) return done;
+    publishing.catch(() => undefined); // sigue en segundo plano; el resultado queda en la base
+    return this.socialPosts.findOne(id);
   }
 
   /** Programa en la fecha indicada, o en el mejor horario según las métricas si no se indica. */

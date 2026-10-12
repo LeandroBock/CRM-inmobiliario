@@ -1,11 +1,11 @@
 import type { Property } from './properties';
 
-export type Platform = 'facebook' | 'instagram';
+export type Platform = 'facebook' | 'instagram' | 'tiktok';
 export type PostStatus = 'borrador' | 'programado' | 'publicando' | 'publicado' | 'fallido';
 
 export interface SocialPost {
   id: string;
-  platform: Platform | 'tiktok' | 'linkedin';
+  platform: Platform | 'linkedin';
   format: string;
   copy: string;
   hashtags: string[];
@@ -16,12 +16,41 @@ export interface SocialPost {
   externalUrl?: string | null;
   errorMessage?: string | null;
   property?: { id: string; title: string } | null;
+  platformOptions?: TikTokOptions;
   createdAt: string;
 }
 
-export const PLATFORMS: { value: Platform; label: string }[] = [
+export interface TikTokOptions {
+  privacyLevel?: string;
+  disableComment?: boolean;
+  disableDuet?: boolean;
+  disableStitch?: boolean;
+}
+
+/** Cuenta de TikTok conectada y lo que permite (TikTok exige mostrarlo antes de publicar). */
+export interface TikTokCreatorInfo {
+  creatorNickname: string;
+  creatorUsername: string;
+  privacyLevelOptions: string[];
+  commentDisabled: boolean;
+  duetDisabled: boolean;
+  stitchDisabled: boolean;
+  maxVideoPostDurationSec: number;
+}
+
+export const TIKTOK_PRIVACY: Record<string, string> = {
+  PUBLIC_TO_EVERYONE: 'Todos',
+  MUTUAL_FOLLOW_FRIENDS: 'Amigos (se siguen mutuamente)',
+  FOLLOWER_OF_CREATOR: 'Seguidores',
+  SELF_ONLY: 'Solo yo (privado)',
+};
+
+export const isVideoUrl = (url: string) => /\.(mp4|mov)(\?.*)?$/i.test(url);
+
+export const PLATFORMS: { value: Platform; label: string; videoOnly?: boolean }[] = [
   { value: 'facebook', label: 'Facebook' },
   { value: 'instagram', label: 'Instagram' },
+  { value: 'tiktok', label: 'TikTok', videoOnly: true },
 ];
 
 export const POST_STATUSES: { value: PostStatus; label: string; bg: string; fg: string }[] = [

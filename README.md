@@ -225,12 +225,16 @@ lo normal. Con menos de 3 comparables no estima. Mejora a medida que se cargan p
 Endpoint: `POST /avo/comparables`. El modelo de tasación en Python (`/avo/appraise`) sigue disponible para cuando
 haya datos para entrenarlo.
 
-## Redes sociales (Facebook e Instagram)
+## Redes sociales (Facebook, Instagram y TikTok)
 
-Pestaña **Redes**: crear, editar, borrar, publicar ya o programar publicaciones, con texto, hashtags y hasta 10 fotos
-(con más de una, carrusel). Desde **Propiedades → Publicar** arranca con el texto, los hashtags y las fotos de la
-propiedad. Si una falla, queda con el motivo que dio Meta para corregir y reintentar. Las programadas se publican
-solas (el programador corre cada minuto). TikTok y LinkedIn todavía no.
+Pestaña **Redes**: crear, editar, borrar, publicar ya o programar publicaciones, con texto, hashtags y **hasta 10
+fotos** (con más de una, carrusel) **o un video** (MP4 o MOV, hasta 50 MB). Un video sale como **Reel** en Instagram,
+como video en Facebook y en **TikTok**. Desde **Propiedades → Publicar** arranca con el texto, los hashtags y las
+fotos de la propiedad. Si una falla, queda con el motivo para corregir y reintentar. Las programadas se publican
+solas (el programador corre cada minuto). Un video puede tardar minutos en procesarse: queda "publicando" y la
+pantalla se actualiza sola. LinkedIn todavía no.
+
+### Facebook e Instagram
 
 **Configuración (una vez):**
 1. Una **página de Facebook** y una **cuenta de Instagram profesional** (de empresa o creador) **vinculada a esa
@@ -248,6 +252,27 @@ solas (el programador corre cada minuto). TikTok y LinkedIn todavía no.
 Las fotos tienen que tener un link público `https://` (las que sube el CRM a Supabase Storage o R2 ya lo tienen) y,
 para Instagram, ser JPG (las que sube el CRM ya se convierten). Versión de la API de Meta: `META_GRAPH_VERSION`
 (por defecto `v25.0`, la usan también WhatsApp).
+
+### TikTok
+
+TikTok solo acepta video. **Mientras TikTok no audite la app, solo deja publicar en cuentas privadas** (si la cuenta
+es pública, la publicación falla con ese motivo). Para publicar en la cuenta pública hay que pedir la auditoría en
+TikTok for Developers. TikTok también limita a ~15 publicaciones por día por cuenta.
+
+1. En **developers.tiktok.com → Manage apps → Connect an app**: crear la app (plataforma Web). Pide la web de la
+   inmobiliaria y links a términos y política de privacidad.
+2. Agregar los productos **Login Kit** y **Content Posting API** (con *Direct Post*), y los permisos
+   `user.info.basic` y `video.publish`.
+3. En Login Kit, **Redirect URI**: `https://<API>/integrations/tiktok/callback`
+   (p. ej. `https://crm-api-grv3.onrender.com/integrations/tiktok/callback`).
+4. Mientras la app está en *sandbox*, agregar la cuenta de TikTok de la inmobiliaria como usuario de prueba.
+5. En la API: `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` y `TOKEN_ENCRYPTION_KEY` (la misma de Google, o una nueva:
+   `openssl rand -base64 32`).
+6. En el CRM, un administrador: **Redes → Conectar TikTok**. El permiso se renueva solo (dura un año; si se revoca,
+   el CRM lo avisa para reconectar).
+
+Al publicar en TikTok el CRM muestra la cuenta, pide elegir quién puede verlo (sin valor por defecto, como exige
+TikTok) y si se permiten comentarios, dúos y stitch.
 
 ## Google Calendar (un calendario por asesor)
 

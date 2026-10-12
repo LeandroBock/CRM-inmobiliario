@@ -70,3 +70,37 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 export async function apiFetchBlob(path: string): Promise<Blob> {
   return (await request(path)).blob();
 }
+
+/**
+ * Sube un archivo informando el avance (0 a 1). fetch no da progreso de subida, por eso XMLHttpRequest.
+ * Para videos: pueden ser decenas de MB y conviene mostrar cuánto falta.
+ */
+export function uploadWithProgress<T>(path: string, file: File, field: string, onProgress: (fraction: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}${path}`);
+    const token = tokenStore.get();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onerror = () => reject(new Error('Se cortó la conexión mientras se subía el archivo'));
+    xhr.onload = () => {
+      let body: { message?: string | string[] } = {};
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        /* sin JSON */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(body as T);
+      if (xhr.status === 401 && token) {
+        tokenStore.clear();
+        window.dispatchEvent(new Event(AUTH_EVENT));
+      }
+      if (xhr.status === 413) return reject(new Error('El archivo es demasiado grande'));
+      const msg = Array.isArray(body.message) ? body.message.join(', ') : body.message;
+      reject(new Error(msg ?? `Error ${xhr.status}`));
+    };
+    const form = new FormData();
+    form.append(field, file);
+    xhr.send(form);
+  });
+}

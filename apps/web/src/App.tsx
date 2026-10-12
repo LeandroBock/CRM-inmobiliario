@@ -30,11 +30,12 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const google = params.get('google');
     const lead = params.get('lead');
-    if (google || lead) window.history.replaceState(null, '', window.location.pathname);
-    return { google, lead: lead && /^[0-9a-f-]{36}$/i.test(lead) ? lead : null };
+    const tiktok = params.get('tiktok');
+    if (google || lead || tiktok) window.history.replaceState(null, '', window.location.pathname);
+    return { google, tiktok, lead: lead && /^[0-9a-f-]{36}$/i.test(lead) ? lead : null };
   });
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [page, setPage] = useState<PageId>(entry.lead ? 'leads' : entry.google ? 'agenda' : 'panel');
+  const [page, setPage] = useState<PageId>(entry.lead ? 'leads' : entry.google ? 'agenda' : entry.tiktok ? 'redes' : 'panel');
   /**
    * Lead a abrir al entrar a Leads desde otra pantalla (agenda, avisos, email). `n` cambia en cada pedido
    * para que la pantalla se vuelva a montar aunque sea el mismo lead.
@@ -44,9 +45,16 @@ export default function App() {
     setLeadToOpen((prev) => ({ id, n: (prev?.n ?? 0) + 1 }));
     setPage('leads');
   }, []);
-  const googleResult = entry.google;
+  // Vuelta de conectar Google Calendar o TikTok (mismo aviso, distinto texto)
+  const googleResult = entry.google ?? entry.tiktok;
   const [googleNotice, setGoogleNotice] = useState<string | null>(() =>
-    googleResult === 'conectado'
+    entry.tiktok
+      ? entry.tiktok === 'conectado'
+        ? 'Listo: la cuenta de TikTok quedó conectada. Ya podés publicar videos desde Redes.'
+        : entry.tiktok === 'cancelado'
+          ? 'Cancelaste la conexión con TikTok.'
+          : 'No se pudo conectar TikTok. Probá de nuevo; si sigue fallando, revisá la configuración de la app en TikTok for Developers.'
+      : googleResult === 'conectado'
       ? 'Listo: tu Google Calendar quedó conectado. Las visitas de tus leads ya se están copiando.'
       : googleResult === 'cancelado'
         ? 'Cancelaste la conexión con Google Calendar.'
@@ -112,7 +120,7 @@ export default function App() {
       )}
       {page === 'panel' && <Dashboard />}
       {page === 'propiedades' && <Properties />}
-      {page === 'redes' && <Social />}
+      {page === 'redes' && <Social isAdmin={user.role === 'admin'} />}
       {/* key: abrir otro lead desde la agenda vuelve a montar la pantalla con ese lead */}
       {page === 'leads' && <Leads key={leadToOpen?.n ?? 0} initialLeadId={leadToOpen?.id ?? null} />}
       {page === 'equipo' && user.role === 'admin' && <Team currentUserId={user.id} />}

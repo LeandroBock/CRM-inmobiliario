@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { apiFetch } from '../api/client';
 import type { Paginated } from '../api/properties';
-import { PLATFORMS, POST_STATUSES, captionOf, type SocialPost } from '../api/social';
+import { PLATFORMS, POST_STATUSES, captionOf, isVideoUrl, type SocialPost } from '../api/social';
 import Modal from '../components/Modal';
 import SocialPostForm from '../components/SocialPostForm';
 import { btnLink, btnPrimary, btnSecondary, card, colors, input } from '../styles';
@@ -11,8 +11,15 @@ const EDITABLE = ['borrador', 'programado', 'fallido'];
 
 const dateTime = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
-/** Publicaciones en Facebook e Instagram: borradores, programadas, publicadas y las que fallaron. */
-export default function Social() {
+interface TikTokStatus {
+  configured: boolean;
+  connected: boolean;
+  displayName: string | null;
+  username: string | null;
+}
+
+/** Publicaciones en Facebook, Instagram y TikTok: borradores, programadas, publicadas y las que fallaron. */
+export default function Social({ isAdmin }: { isAdmin: boolean }) {
   const [data, setData] = useState<Paginated<SocialPost> | null>(null);
   const [configured, setConfigured] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState('');
@@ -24,9 +31,40 @@ export default function Social() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [tiktok, setTikTok] = useState<TikTokStatus | null>(null);
+
   useEffect(() => {
     apiFetch<Record<string, boolean>>('/social/status').then(setConfigured).catch(() => undefined);
-  }, []);
+    apiFetch<TikTokStatus>('/integrations/tiktok/status').then(setTikTok).catch(() => undefined);
+  }, [reload]);
+
+  // Un video puede tardar minutos en procesarse: mientras haya algo "publicando", la lista se actualiza sola.
+  const anyPublishing = data?.items.some((p) => p.status === 'publicando') ?? false;
+  useEffect(() => {
+    if (!anyPublishing) return;
+    const t = window.setTimeout(() => setReload((r) => r + 1), 8000);
+    return () => window.clearTimeout(t);
+  }, [anyPublishing, data]);
+
+  async function connectTikTok() {
+    try {
+      const { url } = await apiFetch<{ url: string }>('/integrations/tiktok/connect', { method: 'POST' });
+      window.location.assign(url); // TikTok pide permiso y vuelve al CRM con ?tiktok=...
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function disconnectTikTok() {
+    if (!window.confirm('¿Desconectar la cuenta de TikTok? Las publicaciones programadas para TikTok van a fallar hasta que la conectes de nuevo.')) return;
+    try {
+      await apiFetch<void>('/integrations/tiktok', { method: 'DELETE' });
+      setNotice('Se desconectó TikTok');
+      setReload((r) => r + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -78,8 +116,32 @@ export default function Social() {
 
       <p style={{ color: colors.muted, fontSize: 14, marginTop: 0 }}>
         {PLATFORMS.map((p) => `${p.label}: ${configured[p.value] ? 'conectado ✔' : 'sin conectar'}`).join(' · ')}
-        {!anyConfigured && ' — podés preparar borradores; para publicar falta cargar las claves de Meta en el servidor.'}
+        {!anyConfigured && ' — podés preparar borradores mientras tanto.'}
       </p>
+
+      {tiktok?.configured && (
+        <div style={tiktokCard}>
+          <span style={{ flex: 1, fontSize: 14 }}>
+            {tiktok.connected ? (
+              <>
+                <strong>TikTok conectado</strong>
+                <span style={{ color: colors.muted }}> · @{tiktok.username ?? '?'}{tiktok.displayName ? ` (${tiktok.displayName})` : ''}</span>
+              </>
+            ) : (
+              <>
+                <strong>Conectá la cuenta de TikTok</strong>
+                <span style={{ color: colors.muted }}> de la inmobiliaria para publicar videos.{!isAdmin && ' Lo tiene que hacer un administrador.'}</span>
+              </>
+            )}
+          </span>
+          {isAdmin &&
+            (tiktok.connected ? (
+              <button style={{ ...btnLink, color: colors.danger }} onClick={disconnectTikTok}>Desconectar</button>
+            ) : (
+              <button style={btnSecondary} onClick={connectTikTok}>Conectar TikTok</button>
+            ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <select style={{ ...input, width: 180 }} value={status} onChange={(e) => (setStatus(e.target.value), setPage(1))}>
@@ -132,13 +194,20 @@ export default function Social() {
                 <tr key={p.id} style={{ borderTop: `1px solid ${colors.border}` }}>
                   <td style={{ ...td, maxWidth: 420 }}>
                     <div style={{ display: 'flex', gap: 10 }}>
-                      {p.mediaUrls[0] && <img src={p.mediaUrls[0]} alt="" loading="lazy" style={thumb} />}
+                      {p.mediaUrls[0] &&
+                        (isVideoUrl(p.mediaUrls[0]) ? (
+                          <div style={{ ...thumb, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1f2937', color: '#fff', fontSize: 20 }} aria-label="Video">
+                            ▶
+                          </div>
+                        ) : (
+                          <img src={p.mediaUrls[0]} alt="" loading="lazy" style={thumb} />
+                        ))}
                       <div style={{ minWidth: 0 }}>
                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', whiteSpace: 'pre-line' }}>
                           {text || <em style={{ color: colors.muted }}>(sin texto)</em>}
                         </div>
                         <small style={{ color: colors.muted }}>
-                          {p.mediaUrls.length ? `${p.mediaUrls.length} foto${p.mediaUrls.length > 1 ? 's' : ''}` : 'Solo texto'}
+                          {p.mediaUrls.length && isVideoUrl(p.mediaUrls[0]) ? 'Video' : p.mediaUrls.length ? `${p.mediaUrls.length} foto${p.mediaUrls.length > 1 ? 's' : ''}` : 'Solo texto'}
                           {p.property && ` · ${p.property.title}`}
                         </small>
                       </div>
@@ -218,4 +287,15 @@ export default function Social() {
 const th: CSSProperties = { padding: '12px 16px', fontWeight: 500 };
 const td: CSSProperties = { padding: '12px 16px', verticalAlign: 'top' };
 const thumb: CSSProperties = { width: 56, height: 56, objectFit: 'cover', borderRadius: 6, flexShrink: 0, background: colors.soft };
+const tiktokCard: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: 12,
+  border: `1px solid ${colors.border}`,
+  background: '#fff',
+  borderRadius: 10,
+  padding: '12px 14px',
+  marginBottom: 16,
+};
 const banner: CSSProperties = { border: '1px solid', borderRadius: 8, padding: '10px 14px', fontSize: 14, margin: '0 0 16px' };
