@@ -306,14 +306,15 @@ Si algo falla en el paso 6: volver a `STORAGE_DRIVER=local` y `$C up -d api`. La
 mientras tanto se siguen viendo (su link apunta al bucket); los audios y fotos de clientes recibidos en ese rato
 no se van a poder abrir hasta volver a `s3`.
 
-## Deploy en Render + Supabase + R2 (plan gratis)
+## Deploy en Render + Supabase (plan gratis)
 
-Para arrancar sin pagar: la API y la web en **Render**, la base en **Supabase** y los archivos en **Cloudflare R2**.
-`render.yaml` (Blueprint) crea los dos servicios de Render ya configurados.
+Para arrancar sin pagar (ninguno pide tarjeta): la API y la web en **Render**; la base y los archivos en **Supabase**
+(Database + Storage). `render.yaml` (Blueprint) crea los dos servicios de Render ya configurados.
 
 **Límites del plan gratis:** la API de Render se duerme a los 15 minutos sin uso (la primera carga tarda ~1 minuto y
 un WhatsApp que llega con el servicio dormido se contesta un minuto tarde); Supabase se pausa tras 7 días sin
-actividad y no hace backups; la base tiene 500 MB. El paso 6 (monitor) evita que se duerman. Para atender clientes
+actividad y no hace backups; la base tiene 500 MB y el Storage 1 GB (unas 3.000 fotos, más audios y backups), con
+5 GB por mes de descarga. El paso 6 (monitor) evita que se duerman. Para atender clientes
 reales conviene pasar la API a Render **Starter** (en `render.yaml`: `plan: starter`).
 
 ### 1. Supabase (base de datos)
@@ -328,21 +329,38 @@ reales conviene pasar la API a Render **Starter** (en `render.yaml`: `plan: star
    `[YOUR-PASSWORD]`. Esa es la `DATABASE_URL`. (La "Direct connection" no sirve: en el plan gratis es solo IPv6,
    y Render no la alcanza.)
 
-### 2. Cloudflare R2 (fotos y audios)
+### 2. Supabase Storage (fotos y audios)
 
-1. **R2 → Create bucket** dos veces: `crm-fotos` (público) y `crm-privado` (privado).
-2. En `crm-fotos` → Settings → **Public Development URL** → activar. Esa URL es `S3_PUBLIC_URL`.
-   En `crm-privado` no activar nada.
-3. **R2 → Manage API tokens → Create API token**: permiso **Object Read & Write**, solo para esos dos buckets.
-   Da `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` y el endpoint (`https://<id-de-cuenta>.r2.cloudflarestorage.com`
-   = `S3_ENDPOINT`).
-4. **Verificar** desde tu máquina (Render gratis no tiene consola): crear `apps/api/.env.r2` (no se sube a git) con
-   `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BUCKET=crm-fotos`, `S3_PUBLIC_URL`,
-   `S3_PRIVATE_BUCKET=crm-privado` y `STORAGE_DRIVER=s3`, y correr:
+1. **Storage → New bucket** dos veces:
+   - `crm-fotos` con **Public bucket activado** (las fotos de propiedades las ven portales y redes).
+   - `crm-privado` con Public bucket **desactivado** (audios y fotos de clientes, y los backups).
+2. **Project Settings → Storage → S3 Connection** (o Storage → Settings): copiar el **Endpoint** (`S3_ENDPOINT`,
+   termina en `/storage/v1/s3`) y la **Region** (`S3_REGION`; con East US es `us-east-1`). Ahí mismo,
+   **New access key** da `S3_ACCESS_KEY_ID` y `S3_SECRET_ACCESS_KEY` (el secreto se ve una sola vez: guardarlo).
+3. La URL pública de las fotos es `https://<id-del-proyecto>.supabase.co/storage/v1/object/public/crm-fotos`
+   (`S3_PUBLIC_URL`, sin barra al final; el id es el de la dirección del proyecto).
+4. **Verificar** desde tu máquina (Render gratis no tiene consola): crear `apps/api/.env.storage` (no se sube a git)
+   con:
+   ```
+   STORAGE_DRIVER=s3
+   S3_ENDPOINT=https://<id-del-proyecto>.supabase.co/storage/v1/s3
+   S3_REGION=us-east-1
+   S3_FORCE_PATH_STYLE=true
+   S3_ACCESS_KEY_ID=...
+   S3_SECRET_ACCESS_KEY=...
+   S3_PUBLIC_BUCKET=crm-fotos
+   S3_PUBLIC_URL=https://<id-del-proyecto>.supabase.co/storage/v1/object/public/crm-fotos
+   S3_PRIVATE_BUCKET=crm-privado
+   ```
+   y correr:
    ```bash
-   set -a; source apps/api/.env.r2; set +a; npm run storage:check -w apps/api
+   set -a; source apps/api/.env.storage; set +a; npm run storage:check -w apps/api
    ```
    Repetir hasta que diga "Todo bien".
+
+Si más adelante se llena el GB gratis, se puede pasar a Cloudflare R2 (10 GB gratis, pide tarjeta): crear los buckets
+ahí, copiar los archivos de un bucket al otro (por ejemplo con rclone) y cambiar las variables `S3_*` (con R2:
+`S3_REGION=auto`, `S3_FORCE_PATH_STYLE=false`).
 
 ### 3. Render (API y web)
 
@@ -350,7 +368,7 @@ reales conviene pasar la API a Render **Starter** (en `render.yaml`: `plan: star
    - `DATABASE_URL`: la del paso 1.4.
    - `WEB_ORIGIN`: `https://crm-web.onrender.com` · `VITE_API_URL`: `https://crm-api.onrender.com`.
    - `ADMIN_EMAIL` / `ADMIN_PASSWORD` (mínimo 10 caracteres): el primer administrador.
-   - Los `S3_*` del paso 2.
+   - Los `S3_*` del paso 2 (`S3_REGION` y `S3_FORCE_PATH_STYLE` ya vienen puestos para Supabase en East US).
    - Claude y WhatsApp se pueden dejar vacíos y cargar después (**crm-api → Environment**).
 2. Si Render le pone otra dirección a algún servicio (porque el nombre estaba tomado, p. ej. `crm-api-x1y2`),
    corregir `WEB_ORIGIN` en crm-api y `VITE_API_URL` en crm-web con las direcciones reales, y en crm-web hacer
@@ -361,7 +379,8 @@ reales conviene pasar la API a Render **Starter** (en `render.yaml`: `plan: star
    - `ENETUNREACH` o similar al conectar a la base: se usó la "Direct connection" en vez del Session pooler.
    - `type "geography" does not exist`: falta activar PostGIS (paso 1.2).
    - `Max client connections reached`: bajar `DATABASE_POOL_MAX`.
-4. Entrar a la web con el administrador y hacer el checklist de R2 (README → "El día que se configura R2", paso 6).
+4. Entrar a la web con el administrador y probar los archivos: subir una foto a una propiedad y abrirla en una
+   ventana de incógnito (tiene que verse); mandar un audio y una foto al WhatsApp del CRM y verlos en el lead.
 5. **Límite de intentos de login:** desde el celular con datos móviles (no el wifi), poner 5 veces una contraseña
    mala; después, desde la compu, entrar normal. Si la compu también quedó bloqueada, el CRM no está viendo la IP
    real de cada uno: hay que ajustar `TRUST_PROXY`.
@@ -375,15 +394,17 @@ generó Render (se ve en Environment).
 ### 5. Backups diarios (GitHub Actions)
 
 Supabase gratis no hace backups. `.github/workflows/backup-db.yml` hace uno por día (04:00, hora argentina) en
-`crm-privado/backups/` y guarda 30 días.
+`crm-privado/backups/` (Supabase Storage) y guarda 30 días.
 
 1. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**, uno por cada uno:
    `BACKUP_DATABASE_URL` (la misma `DATABASE_URL`), `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
    `S3_PRIVATE_BUCKET`.
-2. **Actions → Backup de la base → Run workflow** para probarlo, y confirmar en R2 que apareció el archivo.
+2. **Actions → Backup de la base → Run workflow** para probarlo, y confirmar en Supabase (Storage → crm-privado →
+   backups) que apareció el archivo.
    Si alguna vez falla, GitHub te avisa por email.
 
-**Restaurar** (reemplaza todos los datos): en Render, **Suspend** crm-api; bajar el `.dump` desde R2; y correr
+**Restaurar** (reemplaza todos los datos): en Render, **Suspend** crm-api; bajar el `.dump` desde Supabase Storage;
+y correr
 ```bash
 deploy/restore-backup.sh crm-AAAAMMDD-HHMM.dump "<DATABASE_URL>" --si-borrar-todo
 ```

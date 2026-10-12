@@ -1,5 +1,5 @@
-# Blueprint de Render: crea la API y la web de una vez. Ver README > Deploy en Render + Supabase + R2.
-# La base es de Supabase y los archivos van a Cloudflare R2: acá no se crean.
+# Blueprint de Render: crea la API y la web de una vez. Ver README > Deploy en Render + Supabase.
+# La base y los archivos están en Supabase (Database y Storage): acá no se crean.
 # Los valores con "sync: false" los pide Render al crear el Blueprint (son secretos o dependen de tus cuentas).
 
 services:
@@ -44,13 +44,16 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
 
-      # Archivos en Cloudflare R2 (el disco de Render se borra en cada deploy)
+      # Archivos en Supabase Storage, por su API compatible con S3 (el disco de Render se borra en cada deploy).
+      # Con Cloudflare R2 en vez de Supabase: S3_REGION=auto y S3_FORCE_PATH_STYLE=false.
       - key: STORAGE_DRIVER
         value: s3
       - key: S3_ENDPOINT
         sync: false
       - key: S3_REGION
-        value: auto
+        value: us-east-1 # la región del proyecto de Supabase (East US = us-east-1)
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
       - key: S3_ACCESS_KEY_ID
         sync: false
       - key: S3_SECRET_ACCESS_KEY

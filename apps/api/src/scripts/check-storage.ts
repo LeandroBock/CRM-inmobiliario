@@ -144,7 +144,7 @@ async function main() {
     if (res && res.status !== 403) fail('El bucket privado responde sin clave', 'Activá "Block all public access" en el bucket.');
     else ok('El bucket privado no responde sin clave');
   } else {
-    warn('Confirmá a mano en Cloudflare que el bucket privado tenga Public access DESACTIVADO (r2.dev apagado y sin dominio).');
+    warn('Confirmá a mano que el bucket privado NO sea público (Supabase: sin "Public bucket"; R2: Public access desactivado).');
   }
 
   console.log(failures ? `\n✘ ${failures} problema(s). Corregí lo marcado y volvé a correr la verificación.\n` : '\n✔ Todo bien: ya podés poner STORAGE_DRIVER=s3 (si hay archivos en disco, antes: npm run storage:to-s3).\n');
