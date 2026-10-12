@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { Property } from '../../properties/domain/property.entity';
 import { AvoPrediction } from '../domain/avo-prediction.entity';
 import { AvoRequestDto } from '../presentation/avo-request.dto';
+import { requiredSetting } from '../../../shared/infrastructure/required-setting';
 
 /** Contrato con el microservicio Python (FastAPI + XGBoost). Todo en USD. */
 interface AvmServiceResponse {
@@ -22,15 +23,17 @@ interface AvmServiceResponse {
 @Injectable()
 export class AvoService {
   private readonly logger = new Logger(AvoService.name);
-  private readonly baseUrl: string;
 
   constructor(
     private readonly http: HttpService,
-    config: ConfigService,
+    private readonly config: ConfigService,
     @InjectRepository(AvoPrediction) private readonly predictions: Repository<AvoPrediction>,
     @InjectRepository(Property) private readonly properties: Repository<Property>,
-  ) {
-    this.baseUrl = config.getOrThrow<string>('AVM_SERVICE_URL');
+  ) {}
+
+  /** Opcional: sin el servicio de tasación, la API arranca igual y solo falla la tasación (con un mensaje claro). */
+  private get baseUrl(): string {
+    return requiredSetting(this.config, 'AVM_SERVICE_URL').replace(/\/+$/, '');
   }
 
   async appraise(dto: AvoRequestDto): Promise<AvoPrediction> {
@@ -55,9 +58,10 @@ export class AvoService {
     };
 
     let result: AvmServiceResponse;
+    const url = `${this.baseUrl}/predict`; // antes del try: si falta configurarlo, ese es el mensaje
     try {
       const res = await firstValueFrom(
-        this.http.post<AvmServiceResponse>(`${this.baseUrl}/predict`, features).pipe(timeout(15_000)),
+        this.http.post<AvmServiceResponse>(url, features).pipe(timeout(15_000)),
       );
       result = res.data;
     } catch (err) {

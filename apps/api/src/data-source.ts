@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { DataSource } from 'typeorm';
+import { databaseConnection } from './shared/infrastructure/database-config';
 
 /**
  * DataSource para el CLI de migraciones (npm run migration:*). Corre sobre el código compilado en dist/.
@@ -13,7 +14,7 @@ try {
 
 export default new DataSource({
   type: 'postgres',
-  url: process.env.DATABASE_URL,
+  ...databaseConnection((key) => process.env[key]),
   entities: [join(__dirname, '**', '*.entity.js')],
   migrations: [join(__dirname, 'migrations', '*.js')],
   migrationsTableName: 'migrations',

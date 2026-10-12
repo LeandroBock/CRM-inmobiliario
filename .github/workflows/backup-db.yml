@@ -1,0 +1,38 @@
+# Backup diario de la base (Supabase) al bucket privado de R2. Ver README > Deploy en Render + Supabase + R2 > Backups.
+# Secretos necesarios (Settings → Secrets and variables → Actions): BACKUP_DATABASE_URL, S3_ENDPOINT,
+# S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_PRIVATE_BUCKET.
+name: Backup de la base
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 04:00 en Argentina
+  workflow_dispatch: # botón "Run workflow" para correrlo a mano
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-db
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Solo el SDK de S3 (lo usa deploy/backup-bucket.mjs); sin scripts de instalación (sharp no hace falta acá)
+      - run: npm ci -w apps/api --ignore-scripts --no-audit --no-fund
+      - name: Backup a R2
+        run: deploy/backup-to-s3.sh
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          S3_PRIVATE_BUCKET: ${{ secrets.S3_PRIVATE_BUCKET }}
+          KEEP_DAYS: "30"

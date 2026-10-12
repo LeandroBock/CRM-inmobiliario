@@ -1,0 +1,127 @@
+# Blueprint de Render: crea la API y la web de una vez. Ver README > Deploy en Render + Supabase + R2.
+# La base es de Supabase y los archivos van a Cloudflare R2: acá no se crean.
+# Los valores con "sync: false" los pide Render al crear el Blueprint (son secretos o dependen de tus cuentas).
+
+services:
+  # ---------------------------------------------------------------- API (NestJS, Docker)
+  - type: web
+    name: crm-api
+    runtime: docker
+    plan: free # para clientes reales: starter (no se duerme)
+    region: virginia # misma zona que el proyecto de Supabase (East US / North Virginia)
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    # Solo se vuelve a construir si cambió la API (no por cambios en la web o en la documentación)
+    buildFilter:
+      paths:
+        - apps/api/**
+        - package.json
+        - package-lock.json
+    envVars:
+      # Base de datos (Supabase → Connect → Session pooler; ver README)
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: DATABASE_POOL_MAX
+        value: "5"
+
+      # Dirección de la web (CORS y links de los emails), p. ej. https://crm-web.onrender.com
+      # PUBLIC_URL no hace falta: Render pasa la dirección de la API en RENDER_EXTERNAL_URL.
+      - key: WEB_ORIGIN
+        sync: false
+      - key: TRUST_PROXY
+        value: "1"
+
+      # Sesiones y primer administrador (se crea solo al arrancar con la base vacía)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_HOURS
+        value: "8"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # Archivos en Cloudflare R2 (el disco de Render se borra en cada deploy)
+      - key: STORAGE_DRIVER
+        value: s3
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_BUCKET
+        sync: false
+      - key: S3_PUBLIC_URL
+        sync: false
+      - key: S3_PRIVATE_BUCKET
+        sync: false
+
+      # Asistente (Claude) y WhatsApp. Se pueden dejar vacíos y cargar después en Environment.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: claude-sonnet-5-5
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        generateValue: true
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_TEMPLATE_LANG
+        value: es_AR
+      - key: WHATSAPP_REPLY_DELAY_MS
+        value: "4000"
+      - key: AUTO_ASSIGN_LEADS
+        value: "true"
+      # Opcionales, se agregan después desde Environment cuando se configuren:
+      # OPENAI_API_KEY (audios), WHATSAPP_REENGAGE_TEMPLATE, SMTP_* (emails),
+      # GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / TOKEN_ENCRYPTION_KEY (Google Calendar), AVM_SERVICE_URL (tasación).
+
+  # ---------------------------------------------------------------- Web (React, sitio estático gratis)
+  - type: web
+    name: crm-web
+    runtime: static
+    buildCommand: npm ci -w apps/web && npm run build -w apps/web
+    staticPublishPath: ./apps/web/dist
+    buildFilter:
+      paths:
+        - apps/web/**
+        - package.json
+        - package-lock.json
+    envVars:
+      # Dirección de la API, p. ej. https://crm-api.onrender.com. Se usa al construir: si cambia, hay que redesplegar la web.
+      - key: VITE_API_URL
+        sync: false
+      - key: NODE_VERSION
+        value: "22"
+    # La web es una sola página: cualquier ruta muestra index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Mismas cabeceras de seguridad que apps/web/nginx.conf.template.
+    # connect-src: la API está en *.onrender.com. Con un dominio propio, cambiarlo por ese dominio exacto.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://*.onrender.com; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable

@@ -306,7 +306,96 @@ Si algo falla en el paso 6: volver a `STORAGE_DRIVER=local` y `$C up -d api`. La
 mientras tanto se siguen viendo (su link apunta al bucket); los audios y fotos de clientes recibidos en ese rato
 no se van a poder abrir hasta volver a `s3`.
 
-## Producción
+## Deploy en Render + Supabase + R2 (plan gratis)
+
+Para arrancar sin pagar: la API y la web en **Render**, la base en **Supabase** y los archivos en **Cloudflare R2**.
+`render.yaml` (Blueprint) crea los dos servicios de Render ya configurados.
+
+**Límites del plan gratis:** la API de Render se duerme a los 15 minutos sin uso (la primera carga tarda ~1 minuto y
+un WhatsApp que llega con el servicio dormido se contesta un minuto tarde); Supabase se pausa tras 7 días sin
+actividad y no hace backups; la base tiene 500 MB. El paso 6 (monitor) evita que se duerman. Para atender clientes
+reales conviene pasar la API a Render **Starter** (en `render.yaml`: `plan: starter`).
+
+### 1. Supabase (base de datos)
+
+1. Crear un proyecto en la región **East US (North Virginia)**: la misma zona que la API en Render (la API hace
+   muchas consultas por pedido; la cercanía entre las dos importa más que la cercanía con Argentina).
+   Contraseña de la base: solo letras y números (va dentro de una URL). Guardarla.
+2. **Database → Extensions** → activar **postgis** (en el esquema `extensions`). `uuid-ossp` ya viene activa.
+3. **Seguridad — Project Settings → Data API → desactivar la Data API.** El CRM no la usa, y si queda activa las
+   tablas del CRM serían accesibles con la clave pública del proyecto.
+4. Botón **Connect** → **Session pooler** → copiar la URL (puerto 5432, usuario `postgres.<id>`) y reemplazar
+   `[YOUR-PASSWORD]`. Esa es la `DATABASE_URL`. (La "Direct connection" no sirve: en el plan gratis es solo IPv6,
+   y Render no la alcanza.)
+
+### 2. Cloudflare R2 (fotos y audios)
+
+1. **R2 → Create bucket** dos veces: `crm-fotos` (público) y `crm-privado` (privado).
+2. En `crm-fotos` → Settings → **Public Development URL** → activar. Esa URL es `S3_PUBLIC_URL`.
+   En `crm-privado` no activar nada.
+3. **R2 → Manage API tokens → Create API token**: permiso **Object Read & Write**, solo para esos dos buckets.
+   Da `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` y el endpoint (`https://<id-de-cuenta>.r2.cloudflarestorage.com`
+   = `S3_ENDPOINT`).
+4. **Verificar** desde tu máquina (Render gratis no tiene consola): crear `apps/api/.env.r2` (no se sube a git) con
+   `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_BUCKET=crm-fotos`, `S3_PUBLIC_URL`,
+   `S3_PRIVATE_BUCKET=crm-privado` y `STORAGE_DRIVER=s3`, y correr:
+   ```bash
+   set -a; source apps/api/.env.r2; set +a; npm run storage:check -w apps/api
+   ```
+   Repetir hasta que diga "Todo bien".
+
+### 3. Render (API y web)
+
+1. **New → Blueprint** → elegir el repositorio. Render lee `render.yaml` y pide los valores que faltan:
+   - `DATABASE_URL`: la del paso 1.4.
+   - `WEB_ORIGIN`: `https://crm-web.onrender.com` · `VITE_API_URL`: `https://crm-api.onrender.com`.
+   - `ADMIN_EMAIL` / `ADMIN_PASSWORD` (mínimo 10 caracteres): el primer administrador.
+   - Los `S3_*` del paso 2.
+   - Claude y WhatsApp se pueden dejar vacíos y cargar después (**crm-api → Environment**).
+2. Si Render le pone otra dirección a algún servicio (porque el nombre estaba tomado, p. ej. `crm-api-x1y2`),
+   corregir `WEB_ORIGIN` en crm-api y `VITE_API_URL` en crm-web con las direcciones reales, y en crm-web hacer
+   **Manual Deploy** (la dirección de la API queda fija al construir la web).
+3. Revisar el primer deploy en **crm-api → Logs**: tiene que decir `Nest application successfully started`, y
+   `https://crm-api.onrender.com/health` tiene que responder `{"status":"ok"}`. Errores comunes:
+   - `Configuración inválida para producción`: el mensaje dice qué variable corregir.
+   - `ENETUNREACH` o similar al conectar a la base: se usó la "Direct connection" en vez del Session pooler.
+   - `type "geography" does not exist`: falta activar PostGIS (paso 1.2).
+   - `Max client connections reached`: bajar `DATABASE_POOL_MAX`.
+4. Entrar a la web con el administrador y hacer el checklist de R2 (README → "El día que se configura R2", paso 6).
+5. **Límite de intentos de login:** desde el celular con datos móviles (no el wifi), poner 5 veces una contraseña
+   mala; después, desde la compu, entrar normal. Si la compu también quedó bloqueada, el CRM no está viendo la IP
+   real de cada uno: hay que ajustar `TRUST_PROXY`.
+
+### 4. WhatsApp y Claude
+
+En **crm-api → Environment** cargar `ANTHROPIC_API_KEY` y las `WHATSAPP_*`. En Meta, el webhook es
+`https://crm-api.onrender.com/webhooks/whatsapp` y el *verify token* es el valor de `WHATSAPP_VERIFY_TOKEN` que
+generó Render (se ve en Environment).
+
+### 5. Backups diarios (GitHub Actions)
+
+Supabase gratis no hace backups. `.github/workflows/backup-db.yml` hace uno por día (04:00, hora argentina) en
+`crm-privado/backups/` y guarda 30 días.
+
+1. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**, uno por cada uno:
+   `BACKUP_DATABASE_URL` (la misma `DATABASE_URL`), `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
+   `S3_PRIVATE_BUCKET`.
+2. **Actions → Backup de la base → Run workflow** para probarlo, y confirmar en R2 que apareció el archivo.
+   Si alguna vez falla, GitHub te avisa por email.
+
+**Restaurar** (reemplaza todos los datos): en Render, **Suspend** crm-api; bajar el `.dump` desde R2; y correr
+```bash
+deploy/restore-backup.sh crm-AAAAMMDD-HHMM.dump "<DATABASE_URL>" --si-borrar-todo
+```
+Después, **Resume** crm-api.
+
+### 6. Que no se duerma (y avise si se cae)
+
+En [UptimeRobot](https://uptimerobot.com) (gratis): monitor HTTP a `https://crm-api.onrender.com/health` cada 5
+minutos. Mantiene la API despierta (las 750 horas gratis del mes alcanzan para tenerla prendida siempre), hace que
+Supabase vea actividad, y te manda un email si el CRM deja de responder.
+
+## Producción en un servidor propio (VPS)
 
 Un servidor (VPS) con Docker alcanza: 2 GB de RAM para empezar. `docker-compose.prod.yml` levanta todo con HTTPS
 automático (Caddy pide y renueva los certificados de Let's Encrypt), la base sin acceso desde internet, reinicio
