@@ -71,7 +71,8 @@ export class WhatsAppWebhookController {
 
   /** Valida X-Hub-Signature-256 con el App Secret (requiere rawBody: true en NestFactory.create). */
   private assertValidSignature(req: RawBodyRequest<Request>) {
-    const secret = this.config.getOrThrow<string>('WHATSAPP_APP_SECRET');
+    // trim: al pegar el secreto en un panel es fácil que se cuele un espacio
+    const secret = this.config.getOrThrow<string>('WHATSAPP_APP_SECRET').trim();
     const header = req.header('x-hub-signature-256') ?? '';
     const expected = 'sha256=' + createHmac('sha256', secret).update(req.rawBody ?? Buffer.alloc(0)).digest('hex');
     const a = Buffer.from(header);
