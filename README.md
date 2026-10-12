@@ -383,7 +383,8 @@ ahí, copiar los archivos de un bucket al otro (por ejemplo con rclone) y cambia
    ventana de incógnito (tiene que verse); mandar un audio y una foto al WhatsApp del CRM y verlos en el lead.
 5. **Límite de intentos de login:** desde el celular con datos móviles (no el wifi), poner 5 veces una contraseña
    mala; después, desde la compu, entrar normal. Si la compu también quedó bloqueada, el CRM no está viendo la IP
-   real de cada uno: hay que ajustar `TRUST_PROXY`.
+   real de cada uno: hay que ajustar `TRUST_PROXY` (en Render son 3 intermediarios: Cloudflare, el balanceador y un
+   proxy interno).
 
 ### 4. WhatsApp y Claude
 

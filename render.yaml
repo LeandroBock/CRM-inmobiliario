@@ -31,8 +31,10 @@ services:
       # PUBLIC_URL no hace falta: Render pasa la dirección de la API en RENDER_EXTERNAL_URL.
       - key: WEB_ORIGIN
         sync: false
+      # Intermediarios delante de la API en Render: Cloudflare → balanceador de Render → proxy interno.
+      # Con 3, el límite de intentos de login cuenta la IP real de cada persona (medido con X-Forwarded-For).
       - key: TRUST_PROXY
-        value: "1"
+        value: "3"
 
       # Sesiones y primer administrador (se crea solo al arrancar con la base vacía)
       - key: JWT_SECRET
