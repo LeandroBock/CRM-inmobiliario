@@ -28,6 +28,10 @@ export class LinkedInPublisher implements SocialPublisher {
     };
   }
 
+  isConfigured(): boolean {
+    return Boolean(this.config.get<string>('LINKEDIN_ACCESS_TOKEN')?.trim() && this.config.get<string>('LINKEDIN_AUTHOR_URN')?.trim());
+  }
+
   async publish(post: SocialPost): Promise<PublishResult> {
     const body = {
       author: this.author,

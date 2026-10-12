@@ -5,6 +5,7 @@ import { AvoModule } from '../avo/avo.module';
 import { Property } from '../properties/domain/property.entity';
 import { ContentService } from './application/content.service';
 import { PostingTimeOptimizer } from './application/posting-time.optimizer';
+import { SocialPostsService } from './application/social-posts.service';
 import { PublishingService } from './application/publishing.service';
 import { SOCIAL_PUBLISHERS } from './domain/social-publisher.interface';
 import { SocialPost } from './domain/social-post.entity';
@@ -20,6 +21,7 @@ import { SocialMediaController } from './presentation/social-media.controller';
     ContentService,
     PostingTimeOptimizer,
     PublishingService,
+    SocialPostsService,
     InstagramPublisher,
     FacebookPublisher,
     LinkedInPublisher,

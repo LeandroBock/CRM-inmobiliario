@@ -2,6 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { graphBase } from '../../../shared/infrastructure/meta-graph';
 import { requiredSetting } from '../../../shared/infrastructure/required-setting';
 
 /** Cliente de WhatsApp Business Cloud API (Meta). Para Twilio, implementar la misma interfaz. */
@@ -14,7 +15,7 @@ export class WhatsAppClient {
   constructor(private readonly http: HttpService, private readonly config: ConfigService) {}
 
   private get url() {
-    return `https://graph.facebook.com/v21.0/${requiredSetting(this.config, 'WHATSAPP_PHONE_NUMBER_ID')}/messages`;
+    return `${graphBase(this.config)}/${requiredSetting(this.config, 'WHATSAPP_PHONE_NUMBER_ID')}/messages`;
   }
   private get token() {
     return requiredSetting(this.config, 'WHATSAPP_TOKEN');
@@ -59,7 +60,7 @@ export class WhatsAppClient {
   async downloadMedia(mediaId: string, maxBytes: number): Promise<{ data: Buffer; mimeType: string }> {
     const headers = { Authorization: `Bearer ${this.token}` };
     const meta = await firstValueFrom(
-      this.http.get<{ url: string; mime_type: string; file_size?: number }>(`https://graph.facebook.com/v21.0/${encodeURIComponent(mediaId)}`, { headers }),
+      this.http.get<{ url: string; mime_type: string; file_size?: number }>(`${graphBase(this.config)}/${encodeURIComponent(mediaId)}`, { headers }),
     );
     if (meta.data.file_size && meta.data.file_size > maxBytes) {
       throw new Error(`Archivo demasiado grande (${meta.data.file_size} bytes)`);

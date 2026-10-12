@@ -13,6 +13,7 @@ import {
 } from '../api/properties';
 import Appraisal from '../components/Appraisal';
 import Modal from '../components/Modal';
+import SocialPostForm from '../components/SocialPostForm';
 import PropertyForm from '../components/PropertyForm';
 import { btnLink, btnPrimary, btnSecondary, card, colors, input } from '../styles';
 
@@ -35,6 +36,13 @@ export default function Properties() {
   const [editing, setEditing] = useState<Property | 'new' | null>(null);
   /** Tasación abierta: una propiedad cargada, o 'nueva' para tasar algo que no está en el CRM. */
   const [appraising, setAppraising] = useState<Property | 'nueva' | null>(null);
+  /** Publicar una propiedad en redes (arranca con su texto sugerido y sus fotos). */
+  const [publishing, setPublishing] = useState<Property | null>(null);
+  const [socialConfigured, setSocialConfigured] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    apiFetch<Record<string, boolean>>('/social/status').then(setSocialConfigured).catch(() => undefined);
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -210,6 +218,10 @@ export default function Properties() {
                     Tasar
                   </button>
                   {' · '}
+                  <button style={btnLink} onClick={() => setPublishing(p)}>
+                    Publicar
+                  </button>
+                  {' · '}
                   <button style={btnLink} onClick={() => setEditing(p)}>
                     Editar
                   </button>
@@ -236,6 +248,21 @@ export default function Properties() {
             Siguiente →
           </button>
         </div>
+      )}
+
+      {publishing !== null && (
+        <Modal title={`Publicar en redes: ${publishing.title}`} onClose={() => setPublishing(null)}>
+          <SocialPostForm
+            post={null}
+            initialProperty={publishing}
+            configured={socialConfigured}
+            onCancel={() => setPublishing(null)}
+            onDone={(msg) => {
+              setPublishing(null);
+              setNotice(`${msg}. La ves en la pestaña Redes.`);
+            }}
+          />
+        </Modal>
       )}
 
       {appraising !== null && (

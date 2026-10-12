@@ -11,6 +11,8 @@ export enum SocialPlatform {
 export enum PostStatus {
   BORRADOR = 'borrador',
   PROGRAMADO = 'programado',
+  /** Se está subiendo a la red (evita publicar dos veces si se aprieta dos veces o coincide con el programador). */
+  PUBLICANDO = 'publicando',
   PUBLICADO = 'publicado',
   FALLIDO = 'fallido',
 }
@@ -47,12 +49,14 @@ export class SocialPost {
   @Column({ type: 'enum', enum: PostStatus, default: PostStatus.BORRADOR })
   status: PostStatus;
 
-  @Column({ name: 'scheduled_at', type: 'timestamptz', nullable: true }) scheduledAt?: Date;
+  @Column({ name: 'scheduled_at', type: 'timestamptz', nullable: true }) scheduledAt?: Date | null;
   @Column({ name: 'published_at', type: 'timestamptz', nullable: true }) publishedAt?: Date;
 
   /** ID del post en la plataforma (para consultar métricas). */
   @Column({ name: 'external_id', nullable: true }) externalId?: string;
-  @Column({ name: 'error_message', type: 'text', nullable: true }) errorMessage?: string;
+  /** Link al posteo publicado (para abrirlo desde el CRM). */
+  @Column({ name: 'external_url', type: 'varchar', nullable: true }) externalUrl?: string | null;
+  @Column({ name: 'error_message', type: 'text', nullable: true }) errorMessage?: string | null;
 
   // ---------- Métricas (se refrescan con un job periódico) ----------
   @Column({ type: 'int', default: 0 }) views: number;

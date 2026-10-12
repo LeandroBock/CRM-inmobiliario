@@ -225,6 +225,30 @@ lo normal. Con menos de 3 comparables no estima. Mejora a medida que se cargan p
 Endpoint: `POST /avo/comparables`. El modelo de tasación en Python (`/avo/appraise`) sigue disponible para cuando
 haya datos para entrenarlo.
 
+## Redes sociales (Facebook e Instagram)
+
+Pestaña **Redes**: crear, editar, borrar, publicar ya o programar publicaciones, con texto, hashtags y hasta 10 fotos
+(con más de una, carrusel). Desde **Propiedades → Publicar** arranca con el texto, los hashtags y las fotos de la
+propiedad. Si una falla, queda con el motivo que dio Meta para corregir y reintentar. Las programadas se publican
+solas (el programador corre cada minuto). TikTok y LinkedIn todavía no.
+
+**Configuración (una vez):**
+1. Una **página de Facebook** y una **cuenta de Instagram profesional** (de empresa o creador) **vinculada a esa
+   página** (desde Instagram: Configuración → Tipo de cuenta y herramientas; y en Meta Business Suite, vincular
+   la cuenta a la página).
+2. En **business.facebook.com → Configuración → Usuarios del sistema**, al usuario `crm` (el del token de WhatsApp)
+   **asignale la página y la cuenta de Instagram** con control total.
+3. **Generar token** para ese usuario: tu app, vencimiento **Nunca**, permisos `pages_show_list`,
+   `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`, `instagram_content_publish` y
+   `business_management`.
+4. En la API: `META_ACCESS_TOKEN` = ese token y `META_PAGE_ID` = el ID de la página (en la página: Información →
+   Transparencia de la página, o en Meta Business → Cuentas → Páginas). El CRM pide solo el token de la página y
+   encuentra la cuenta de Instagram vinculada (o se puede fijar con `META_IG_USER_ID`).
+
+Las fotos tienen que tener un link público `https://` (las que sube el CRM a Supabase Storage o R2 ya lo tienen) y,
+para Instagram, ser JPG (las que sube el CRM ya se convierten). Versión de la API de Meta: `META_GRAPH_VERSION`
+(por defecto `v25.0`, la usan también WhatsApp).
+
 ## Google Calendar (un calendario por asesor)
 
 Cada asesor conecta su cuenta desde **Agenda → Conectar**. Desde ese momento, las visitas pendientes y confirmadas

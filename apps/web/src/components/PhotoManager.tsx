@@ -23,13 +23,17 @@ interface Props {
   setUrls: Dispatch<SetStateAction<string[]>>;
   /** Avisa al formulario para que no se pueda guardar con fotos a medio subir. */
   onBusyChange: (busy: boolean) => void;
+  /** Tope de fotos (por defecto el de propiedades; en redes, 10). */
+  max?: number;
+  /** Texto debajo de las fotos. */
+  footnote?: string;
 }
 
 interface UploadedPhoto {
   url: string;
 }
 
-export default function PhotoManager({ urls, setUrls, onBusyChange }: Props) {
+export default function PhotoManager({ urls, setUrls, onBusyChange, max = MAX_PHOTOS, footnote }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -54,9 +58,9 @@ export default function PhotoManager({ urls, setUrls, onBusyChange }: Props) {
       return true;
     });
 
-    const room = MAX_PHOTOS - urls.length - pending;
+    const room = max - urls.length - pending;
     if (valid.length > room) {
-      problems.push(`Se pueden cargar hasta ${MAX_PHOTOS} fotos; se omitieron ${valid.length - Math.max(0, room)}`);
+      problems.push(`Se pueden cargar hasta ${max} fotos; se omitieron ${valid.length - Math.max(0, room)}`);
       valid.splice(Math.max(0, room));
     }
     if (!valid.length) {
@@ -117,8 +121,8 @@ export default function PhotoManager({ urls, setUrls, onBusyChange }: Props) {
       setError('Esa foto ya está cargada');
       return;
     }
-    if (urls.length + pending >= MAX_PHOTOS) {
-      setError(`Se pueden cargar hasta ${MAX_PHOTOS} fotos`);
+    if (urls.length + pending >= max) {
+      setError(`Se pueden cargar hasta ${max} fotos`);
       return;
     }
     setError(null);
@@ -233,7 +237,7 @@ export default function PhotoManager({ urls, setUrls, onBusyChange }: Props) {
         </p>
       )}
       <small style={{ display: 'block', color: colors.muted, marginTop: 6 }}>
-        {urls.length}/{MAX_PHOTOS} fotos. La primera es la portada (la que se usa en listados y redes).
+        {urls.length}/{max} fotos. {footnote ?? 'La primera es la portada (la que se usa en listados y redes).'}
       </small>
     </div>
   );

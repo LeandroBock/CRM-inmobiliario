@@ -20,6 +20,10 @@ export class TikTokPublisher implements SocialPublisher {
     return requiredSetting(this.config, 'TIKTOK_ACCESS_TOKEN');
   }
 
+  isConfigured(): boolean {
+    return Boolean(this.config.get<string>('TIKTOK_ACCESS_TOKEN')?.trim());
+  }
+
   async publish(post: SocialPost): Promise<PublishResult> {
     const videoUrl = post.mediaUrls[0];
     if (!videoUrl) throw new Error('TikTok requiere un video (URL pública verificada)');

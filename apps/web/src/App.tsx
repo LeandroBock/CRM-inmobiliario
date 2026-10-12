@@ -6,16 +6,18 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Login, { type SessionUser } from './pages/Login';
 import Properties from './pages/Properties';
+import Social from './pages/Social';
 import Team from './pages/Team';
 import { btnLink, colors } from './styles';
 
-type PageId = 'panel' | 'propiedades' | 'leads' | 'agenda' | 'equipo';
+type PageId = 'panel' | 'propiedades' | 'leads' | 'agenda' | 'redes' | 'equipo';
 
 const PAGES: { id: PageId; label: string; adminOnly?: boolean }[] = [
   { id: 'panel', label: 'Panel' },
   { id: 'propiedades', label: 'Propiedades' },
   { id: 'leads', label: 'Leads' },
   { id: 'agenda', label: 'Agenda' },
+  { id: 'redes', label: 'Redes' },
   { id: 'equipo', label: 'Equipo', adminOnly: true },
 ];
 
@@ -110,6 +112,7 @@ export default function App() {
       )}
       {page === 'panel' && <Dashboard />}
       {page === 'propiedades' && <Properties />}
+      {page === 'redes' && <Social />}
       {/* key: abrir otro lead desde la agenda vuelve a montar la pantalla con ese lead */}
       {page === 'leads' && <Leads key={leadToOpen?.n ?? 0} initialLeadId={leadToOpen?.id ?? null} />}
       {page === 'equipo' && user.role === 'admin' && <Team currentUserId={user.id} />}
