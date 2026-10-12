@@ -16,7 +16,9 @@ export interface S3Settings {
   forcePathStyle: boolean;
 }
 
-export function s3SettingsFromEnv(get: (key: string) => string | undefined): S3Settings {
+export function s3SettingsFromEnv(rawGet: (key: string) => string | undefined): S3Settings {
+  // Al pegar claves en un panel es fácil que se cuele un espacio o un salto de línea: nunca son parte del valor.
+  const get = (key: string) => rawGet(key)?.trim();
   const accessKeyId = get('S3_ACCESS_KEY_ID');
   const secretAccessKey = get('S3_SECRET_ACCESS_KEY');
   if (!accessKeyId || !secretAccessKey) throw new Error('STORAGE_DRIVER=s3 requiere S3_ACCESS_KEY_ID y S3_SECRET_ACCESS_KEY');
@@ -37,6 +39,8 @@ export class StorageError extends Error {
     readonly code: string,
     readonly status: number | undefined,
     detail: string,
+    /** Qué credenciales se usaron, sin revelarlas: para comparar con las que deberían ser. */
+    private readonly credentialsHint?: string,
   ) {
     super(`${operation} en "${bucket}" falló: ${code}${status ? ` (HTTP ${status})` : ''} — ${detail}`);
   }
@@ -44,7 +48,9 @@ export class StorageError extends Error {
   /** Qué revisar, en palabras (para mostrar en pantalla). */
   get hint(): string {
     if (/NoSuchBucket/i.test(this.code)) return `no existe el bucket "${this.bucket}" (revisá S3_PUBLIC_BUCKET / S3_PRIVATE_BUCKET, distinguen mayúsculas)`;
-    if (/InvalidAccessKeyId|SignatureDoesNotMatch|Unauthorized|InvalidSignature/i.test(this.code)) return 'la clave de acceso no es válida (revisá S3_ACCESS_KEY_ID y S3_SECRET_ACCESS_KEY)';
+    if (/InvalidAccessKeyId|SignatureDoesNotMatch|Unauthorized|InvalidSignature/i.test(this.code)) {
+      return `la clave de acceso no es válida (revisá S3_ACCESS_KEY_ID y S3_SECRET_ACCESS_KEY; ${this.credentialsHint})`;
+    }
     if (/AccessDenied|Forbidden/i.test(this.code)) return `la clave no tiene permiso sobre "${this.bucket}"`;
     if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT/i.test(this.code)) return 'no se puede conectar con el almacenamiento (revisá S3_ENDPOINT)';
     return `error del almacenamiento (${this.code})`;
@@ -54,8 +60,13 @@ export class StorageError extends Error {
 /** Lo mínimo que usa el CRM sobre un bucket: subir, leer, listar y borrar. */
 export class S3Bucket {
   private readonly client: S3Client;
+  private readonly credentialsHint: string;
 
   constructor(settings: S3Settings, readonly name: string) {
+    // El inicio del ID de la clave no es secreto (es como un usuario); del secreto, solo el largo.
+    this.credentialsHint =
+      `se está usando la clave ${settings.accessKeyId.slice(0, 4)}… de ${settings.accessKeyId.length} caracteres, ` +
+      `secreto de ${settings.secretAccessKey.length} caracteres, endpoint ${settings.endpoint ?? '(AWS)'}`;
     this.client = new S3Client({
       endpoint: settings.endpoint,
       region: settings.region,
@@ -76,7 +87,7 @@ export class S3Bucket {
   private wrap(operation: string, err: unknown): StorageError {
     const e = err as { name?: string; Code?: string; code?: string; message?: string; $metadata?: { httpStatusCode?: number }; cause?: { code?: string } };
     const code = e.Code ?? e.cause?.code ?? e.code ?? e.name ?? 'Error';
-    return new StorageError(operation, this.name, code, e.$metadata?.httpStatusCode, e.message ?? String(err));
+    return new StorageError(operation, this.name, code, e.$metadata?.httpStatusCode, e.message ?? String(err), this.credentialsHint);
   }
 
   /** null si no existe. */
