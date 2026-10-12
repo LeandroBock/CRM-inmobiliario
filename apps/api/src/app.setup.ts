@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
@@ -22,6 +22,14 @@ function trustProxy(value = process.env.TRUST_PROXY): number | string | false {
  */
 export function configureApp(app: NestExpressApplication): void {
   app.set('trust proxy', trustProxy());
+  // Todo lo que llega a /webhooks queda en el log antes de cualquier validación: si Meta "no manda nada", acá se ve.
+  const webhookLog = new Logger('Webhooks');
+  app.use('/webhooks', (req: { method: string; originalUrl: string; headers: Record<string, unknown> }, res: { statusCode: number; on: (e: string, f: () => void) => void }, next: () => void) => {
+    res.on('finish', () =>
+      webhookLog.log(`${req.method} ${req.originalUrl.split('?')[0]} → ${res.statusCode} (${String(req.headers['user-agent'] ?? 'sin user-agent').slice(0, 60)}, firma: ${req.headers['x-hub-signature-256'] ? 'sí' : 'no'})`),
+    );
+    next();
+  });
   app.use(
     helmet({
       // La API solo devuelve JSON y archivos; la web (otro origen) tiene que poder mostrar las fotos.
