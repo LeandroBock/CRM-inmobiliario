@@ -39,8 +39,10 @@ export class WhatsAppWebhookController {
     @Res() res: Response,
   ) {
     if (mode === 'subscribe' && token === this.config.get('WHATSAPP_VERIFY_TOKEN')) {
+      this.logger.log('Meta verificó el webhook');
       return res.status(200).send(challenge);
     }
+    this.logger.warn('Meta intentó verificar el webhook con otro verify token (revisá WHATSAPP_VERIFY_TOKEN)');
     throw new ForbiddenException();
   }
 
@@ -56,6 +58,10 @@ export class WhatsAppWebhookController {
         e.changes?.flatMap((c: any) => (c.value?.messages ?? []).map((m: any) => parseMessage(m, c.value?.contacts?.[0]?.profile?.name))),
       ) ?? [];
 
+    // Sin el contenido ni el teléfono completo: alcanza para saber que llegan.
+    const statuses = body?.entry?.flatMap((e: any) => e.changes?.flatMap((c: any) => c.value?.statuses ?? []) ?? []).length ?? 0;
+    this.logger.log(`Webhook de WhatsApp: ${messages.length} mensaje(s), ${statuses} estado(s) de entrega`);
+
     for (const m of messages) {
       // fire-and-forget: no bloqueamos la respuesta a Meta (bajar y transcribir un audio puede tardar)
       this.conversation.handleIncoming(m).catch((err) => this.logger.error(`Error procesando ${m.wamid}: ${err.message}`));
@@ -70,7 +76,14 @@ export class WhatsAppWebhookController {
     const expected = 'sha256=' + createHmac('sha256', secret).update(req.rawBody ?? Buffer.alloc(0)).digest('hex');
     const a = Buffer.from(header);
     const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) throw new UnauthorizedException('Firma inválida');
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      this.logger.warn(
+        header
+          ? 'Webhook de WhatsApp rechazado: la firma no coincide (WHATSAPP_APP_SECRET no es el "App secret" de esta app de Meta)'
+          : 'Webhook de WhatsApp rechazado: llegó sin firma (no viene de Meta)',
+      );
+      throw new UnauthorizedException('Firma inválida');
+    }
   }
 }
 
