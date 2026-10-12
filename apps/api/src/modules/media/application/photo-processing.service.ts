@@ -1,6 +1,7 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { StorageError } from '../../../shared/infrastructure/s3-bucket';
 import { PHOTO_STORAGE, PhotoStorage } from '../domain/photo-storage.port';
 
 /** Lado mayor máximo: suficiente para portales y redes, liviano para WhatsApp. */
@@ -18,20 +19,28 @@ export interface UploadedPhoto {
 
 @Injectable()
 export class PhotoProcessingService {
+  private readonly logger = new Logger(PhotoProcessingService.name);
   constructor(@Inject(PHOTO_STORAGE) private readonly storage: PhotoStorage) {}
 
   async processAll(files: Express.Multer.File[]): Promise<UploadedPhoto[]> {
     if (!files?.length) throw new BadRequestException('No llegó ninguna foto');
     // Primero se procesan todas: si una falla no queda la mitad guardada.
     const processed = await Promise.all(files.map((f) => this.toJpeg(f)));
-    return Promise.all(
-      processed.map(async (p) => ({
-        url: await this.storage.save(`${randomUUID()}.jpg`, p.data),
-        width: p.width,
-        height: p.height,
-        bytes: p.data.length,
-      })),
-    );
+    try {
+      return await Promise.all(
+        processed.map(async (p) => ({
+          url: await this.storage.save(`${randomUUID()}.jpg`, p.data),
+          width: p.width,
+          height: p.height,
+          bytes: p.data.length,
+        })),
+      );
+    } catch (err) {
+      // El detalle técnico va al log; en pantalla, qué revisar.
+      this.logger.error(`No se pudo guardar una foto: ${(err as Error).message}`);
+      const hint = err instanceof StorageError ? err.hint : 'error al guardar el archivo';
+      throw new ServiceUnavailableException(`No se pudo guardar la foto: ${hint}.`);
+    }
   }
 
   /**

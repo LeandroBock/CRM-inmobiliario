@@ -29,6 +29,28 @@ export function s3SettingsFromEnv(get: (key: string) => string | undefined): S3S
   };
 }
 
+/** Falla de S3/R2/Supabase con lo necesario para entenderla: operación, bucket, código y una pista. */
+export class StorageError extends Error {
+  constructor(
+    readonly operation: string,
+    readonly bucket: string,
+    readonly code: string,
+    readonly status: number | undefined,
+    detail: string,
+  ) {
+    super(`${operation} en "${bucket}" falló: ${code}${status ? ` (HTTP ${status})` : ''} — ${detail}`);
+  }
+
+  /** Qué revisar, en palabras (para mostrar en pantalla). */
+  get hint(): string {
+    if (/NoSuchBucket/i.test(this.code)) return `no existe el bucket "${this.bucket}" (revisá S3_PUBLIC_BUCKET / S3_PRIVATE_BUCKET, distinguen mayúsculas)`;
+    if (/InvalidAccessKeyId|SignatureDoesNotMatch|Unauthorized|InvalidSignature/i.test(this.code)) return 'la clave de acceso no es válida (revisá S3_ACCESS_KEY_ID y S3_SECRET_ACCESS_KEY)';
+    if (/AccessDenied|Forbidden/i.test(this.code)) return `la clave no tiene permiso sobre "${this.bucket}"`;
+    if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT/i.test(this.code)) return 'no se puede conectar con el almacenamiento (revisá S3_ENDPOINT)';
+    return `error del almacenamiento (${this.code})`;
+  }
+}
+
 /** Lo mínimo que usa el CRM sobre un bucket: subir, leer, listar y borrar. */
 export class S3Bucket {
   private readonly client: S3Client;
@@ -43,7 +65,18 @@ export class S3Bucket {
   }
 
   async put(key: string, body: Buffer, contentType: string, cacheControl?: string): Promise<void> {
-    await this.client.send(new PutObjectCommand({ Bucket: this.name, Key: key, Body: body, ContentType: contentType, CacheControl: cacheControl }));
+    try {
+      await this.client.send(new PutObjectCommand({ Bucket: this.name, Key: key, Body: body, ContentType: contentType, CacheControl: cacheControl }));
+    } catch (err) {
+      throw this.wrap('Subir', err);
+    }
+  }
+
+  /** Los errores del SDK solo dicen "UnknownError" o un código suelto: se agrega qué se estaba haciendo y dónde. */
+  private wrap(operation: string, err: unknown): StorageError {
+    const e = err as { name?: string; Code?: string; code?: string; message?: string; $metadata?: { httpStatusCode?: number }; cause?: { code?: string } };
+    const code = e.Code ?? e.cause?.code ?? e.code ?? e.name ?? 'Error';
+    return new StorageError(operation, this.name, code, e.$metadata?.httpStatusCode, e.message ?? String(err));
   }
 
   /** null si no existe. */
@@ -53,7 +86,7 @@ export class S3Bucket {
       return res.Body ? Buffer.from(await res.Body.transformToByteArray()) : null;
     } catch (err) {
       if (err instanceof NoSuchKey || (err as { name?: string }).name === 'NoSuchKey') return null;
-      throw err;
+      throw this.wrap('Leer', err);
     }
   }
 
@@ -62,7 +95,9 @@ export class S3Bucket {
     const out: { key: string; lastModified: Date }[] = [];
     let token: string | undefined;
     do {
-      const res = await this.client.send(new ListObjectsV2Command({ Bucket: this.name, Prefix: prefix, ContinuationToken: token }));
+      const res = await this.client
+        .send(new ListObjectsV2Command({ Bucket: this.name, Prefix: prefix, ContinuationToken: token }))
+        .catch((err) => Promise.reject(this.wrap('Listar', err)));
       for (const o of res.Contents ?? []) if (o.Key) out.push({ key: o.Key, lastModified: o.LastModified ?? new Date(0) });
       token = res.IsTruncated ? res.NextContinuationToken : undefined;
     } while (token);
@@ -70,6 +105,7 @@ export class S3Bucket {
   }
 
   async delete(key: string): Promise<void> {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.name, Key: key })); // S3 no falla si no existe
+    // S3 no falla si no existe
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.name, Key: key })).catch((err) => Promise.reject(this.wrap('Borrar', err)));
   }
 }
