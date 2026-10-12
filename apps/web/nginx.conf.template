@@ -1,0 +1,40 @@
+# La imagen oficial de nginx reemplaza ${API_ORIGIN} al arrancar (envsubst) y deja este archivo en conf.d/default.conf.
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    server_tokens off;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    # Cabeceras de seguridad. CSP:
+    # - img-src https: : las propiedades pueden tener fotos con link externo (pegadas a mano).
+    # - blob: en img/media/worker: audios y fotos de clientes (se bajan con sesión) y el conversor de HEIC.
+    # - wasm-unsafe-eval: el conversor de HEIC es WebAssembly. No habilita eval de JavaScript.
+    # - style-src unsafe-inline: la interfaz usa estilos en línea.
+    set $csp "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' ${API_ORIGIN}; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+    add_header Content-Security-Policy $csp always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # Archivos con hash en el nombre (los genera Vite): se pueden cachear para siempre.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options nosniff always;
+        try_files $uri =404;
+    }
+
+    # index.html nunca se cachea: así cada deploy nuevo se ve al recargar.
+    location / {
+        add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy $csp always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+        try_files $uri $uri/ /index.html;
+    }
+}

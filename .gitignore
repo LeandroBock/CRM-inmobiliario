@@ -1,0 +1,19 @@
+node_modules/
+dist/
+dist-scripts/
+.DS_Store
+
+# Secretos: nunca al repositorio
+.env
+.env.*
+!.env.example
+deploy/.env
+
+# Datos
+backups/
+apps/api/uploads/
+
+# Generados
+*.tsbuildinfo
+coverage/
+__pycache__/

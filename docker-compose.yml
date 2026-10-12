@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+      POSTGRES_DB: crm
+    # Se publica en 5433 para no chocar con un PostgreSQL local (Homebrew, Postgres.app) que suele usar el 5432.
+    ports: ["5433:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  avm:
+    build: ./apps/avm-service
+    ports: ["8000:8000"]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: ./apps/api/.env
+    environment:
+      DATABASE_URL: postgres://crm:crm@db:5432/crm
+      AVM_SERVICE_URL: http://avm:8000
+      NODE_ENV: development # este compose es para probar local; producción: docker-compose.prod.yml
+      DB_SYNC: "true" # solo desarrollo: crea las tablas automáticamente
+      UPLOAD_DIR: /app/uploads
+      PUBLIC_URL: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+      avm:
+        condition: service_started
+    ports: ["3000:3000"]
+    volumes:
+      - uploads:/app/uploads # las fotos sobreviven a recrear el contenedor
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000
+    depends_on: [api]
+    ports: ["5173:80"]
+
+volumes:
+  pgdata:
+  uploads:

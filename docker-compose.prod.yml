@@ -1,0 +1,102 @@
+# Producción en un servidor propio (VPS) con HTTPS automático. Ver README > Producción.
+#   cp deploy/.env.example deploy/.env      (dominios y contraseña de la base)
+#   cp apps/api/.env.example apps/api/.env.production   (claves de la API)
+#   docker compose -f docker-compose.prod.yml --env-file deploy/.env up -d --build
+name: crm
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en deploy/.env}
+      POSTGRES_DB: crm
+    # Sin "ports": la base solo es accesible desde los otros contenedores, nunca desde internet.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  avm:
+    build: ./apps/avm-service
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: ${API_ENV_FILE:-./apps/api/.env.production}
+    # Estas pisan lo que diga el env_file: dependen de cómo están conectados los contenedores.
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://crm:${POSTGRES_PASSWORD}@db:5432/crm
+      AVM_SERVICE_URL: http://avm:8000
+      UPLOAD_DIR: /app/uploads
+      PUBLIC_URL: https://${API_DOMAIN:?Falta API_DOMAIN en deploy/.env}
+      WEB_ORIGIN: https://${WEB_DOMAIN:?Falta WEB_DOMAIN en deploy/.env}
+      TRUST_PROXY: ${TRUST_PROXY:-1} # Caddy adelante; con Cloudflare en modo proxy, 2
+    depends_on:
+      db:
+        condition: service_healthy
+      avm:
+        condition: service_started
+    volumes:
+      - uploads:/app/uploads # solo se usa con STORAGE_DRIVER=local
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: https://${API_DOMAIN}
+    restart: unless-stopped
+    depends_on: [api]
+
+  # Proxy con HTTPS: pide y renueva solo los certificados de Let's Encrypt.
+  # Los dominios tienen que apuntar (registro A) a la IP del servidor, con los puertos 80 y 443 abiertos.
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Falta ACME_EMAIL en deploy/.env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificados: no borrar (Let's Encrypt limita cuántos se pueden pedir)
+      - caddy_config:/config
+    depends_on: [web, api]
+
+  # Copia de la base todos los días en ./backups. Ver README > Backups (incluye cómo restaurar).
+  backup:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: crm
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: crm
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/dist-scripts
+**/.env
+**/.env.*
+!**/.env.example
+**/uploads
+backups
+.git
+**/.DS_Store
+**/__pycache__
