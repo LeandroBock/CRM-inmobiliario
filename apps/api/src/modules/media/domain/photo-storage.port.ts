@@ -5,6 +5,8 @@ export interface PhotoStorage {
   /** Archivos guardados, con su fecha de creación. */
   list(): Promise<StoredPhoto[]>;
   remove(fileName: string): Promise<void>;
+  /** Contenido de una foto guardada; null si no existe. */
+  read(fileName: string): Promise<Buffer | null>;
   /** Nombre del archivo si la URL apunta a este almacenamiento; null si es un link externo. */
   fileNameFromUrl(url: string): string | null;
 }

@@ -215,6 +215,23 @@ npm test                  # desde la raíz (o npm test -w apps/api)
 
 Correrlos antes de cada deploy: si algo falla, no subir.
 
+## Fotos con IA (Cloudflare, gratis)
+
+En cualquier foto subida al CRM, **✨ IA** abre el editor: **Amueblar** (amoblamiento virtual de un ambiente vacío),
+**Mejorar luz y colores**, **Ordenar** u **Otra cosa** (con indicaciones). El resultado es una foto **nueva** (la original
+no se toca) que se agrega al lado o la reemplaza, y lleva grabada la leyenda **"Imagen ilustrativa"**: el cliente tiene
+que saber que no es el estado real del inmueble. Revisá siempre que la IA no haya cambiado ventanas, paredes ni medidas.
+
+Usa Workers AI de Cloudflare (modelo FLUX.2 klein 4B). La cuenta gratis trae 10.000 "neuronas" por día, que alcanzan
+para unas 50–60 fotos; se renuevan a las 21 h (hora argentina). Para activarlo:
+
+1. Crear una cuenta en https://dash.cloudflare.com (plan Free).
+2. **Account ID**: en el panel, menú de la cuenta → *Account home*, columna derecha (o en la URL, después de `dash.cloudflare.com/`).
+3. **Token**: *Manage account → Account API tokens → Create token* → plantilla **Workers AI** (permiso *Workers AI: Read/Edit*).
+4. En Render → crm-api → *Environment*: `CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_AI_TOKEN`.
+
+`IMAGE_AI_MODEL` permite cambiar de modelo (p. ej. `@cf/black-forest-labs/flux-2-klein-9b`, mejor pero gasta ~10 veces más cupo).
+
 ## Tasación por comparables
 
 En **Propiedades**, el botón **Tasar** (arriba, para algo que no está cargado) o **Tasar** en cada fila. Busca

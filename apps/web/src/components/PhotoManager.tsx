@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type Dispatch, type DragEvent, type SetStateAction } from 'react';
 import { apiFetch } from '../api/client';
 import { btnLink, btnSecondary, colors, input } from '../styles';
+import PhotoAiEditor from './PhotoAiEditor';
 
 /** Mismos límites que la API (MediaController / PropertyDto). */
 const MAX_FILE_MB = 15;
@@ -39,6 +40,8 @@ export default function PhotoManager({ urls, setUrls, onBusyChange, max = MAX_PH
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkInput, setLinkInput] = useState('');
+  /** Foto abierta en el editor con IA. */
+  const [aiPhoto, setAiPhoto] = useState<string | null>(null);
 
   useEffect(() => onBusyChange(pending > 0), [pending, onBusyChange]);
 
@@ -177,6 +180,9 @@ export default function PhotoManager({ urls, setUrls, onBusyChange, max = MAX_PH
             <li key={url} style={tile}>
               <img src={url} alt={`Foto ${i + 1}`} loading="lazy" style={thumb} />
               {i === 0 && <span style={coverBadge}>Portada</span>}
+              <button type="button" style={aiBtn} onClick={() => setAiPhoto(url)} title="Editar con IA: amueblar, mejorar la luz, ordenar" aria-label={`Editar foto ${i + 1} con IA`}>
+                ✨ IA
+              </button>
               <div style={tileActions}>
                 <button type="button" style={iconBtn} onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Mover foto ${i + 1} a la izquierda`}>
                   ←
@@ -227,6 +233,28 @@ export default function PhotoManager({ urls, setUrls, onBusyChange, max = MAX_PH
           Agregar link
         </button>
       </div>
+
+      {aiPhoto && (
+        <PhotoAiEditor
+          url={aiPhoto}
+          canAdd={urls.length + pending < max}
+          onClose={() => setAiPhoto(null)}
+          onAdd={(newUrl) => {
+            // Queda al lado de la original
+            setUrls((prev) => {
+              const at = prev.indexOf(aiPhoto);
+              const next = [...prev];
+              next.splice(at < 0 ? next.length : at + 1, 0, newUrl);
+              return next;
+            });
+            setAiPhoto(null);
+          }}
+          onReplace={(newUrl) => {
+            setUrls((prev) => prev.map((u) => (u === aiPhoto ? newUrl : u)));
+            setAiPhoto(null);
+          }}
+        />
+      )}
 
       {error && (
         <p role="alert" style={{ color: colors.danger, fontSize: 13, margin: '8px 0 0' }}>
@@ -288,12 +316,24 @@ const coverBadge: CSSProperties = {
   borderRadius: 4,
   padding: '2px 6px',
 };
-const tileActions: CSSProperties = { display: 'flex', alignItems: 'center', gap: 4, padding: 4 };
+const aiBtn: CSSProperties = {
+  position: 'absolute',
+  top: 6,
+  right: 6,
+  border: 0,
+  background: 'rgba(255,255,255,0.92)',
+  borderRadius: 4,
+  padding: '2px 7px',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+const tileActions: CSSProperties = { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 3, padding: 4 };
 const iconBtn: CSSProperties = {
   border: `1px solid ${colors.border}`,
   background: '#fff',
   borderRadius: 4,
-  padding: '2px 8px',
+  padding: '2px 6px',
   fontSize: 13,
   cursor: 'pointer',
 };

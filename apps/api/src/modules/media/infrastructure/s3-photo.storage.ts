@@ -31,6 +31,11 @@ export class S3PhotoStorage implements PhotoStorage {
     await this.bucket.delete(PREFIX + fileName);
   }
 
+  async read(fileName: string): Promise<Buffer | null> {
+    if (!PHOTO_FILE_NAME.test(fileName)) return null;
+    return this.bucket.get(PREFIX + fileName);
+  }
+
   fileNameFromUrl(url: string): string | null {
     const base = `${this.publicUrl}/${PREFIX}`;
     if (!url.startsWith(base)) return null;

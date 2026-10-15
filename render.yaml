@@ -89,6 +89,7 @@ services:
       # Opcionales, se agregan después desde Environment cuando se configuren:
       # META_ACCESS_TOKEN y META_PAGE_ID (publicar en Facebook e Instagram; ver README > Redes sociales),
       # TIKTOK_CLIENT_KEY y TIKTOK_CLIENT_SECRET (TikTok; necesita TOKEN_ENCRYPTION_KEY),
+      # CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_AI_TOKEN (fotos con IA, gratis; ver README > Fotos con IA),
       # OPENAI_API_KEY (audios), WHATSAPP_REENGAGE_TEMPLATE, SMTP_* (emails),
       # GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / TOKEN_ENCRYPTION_KEY (Google Calendar), AVM_SERVICE_URL (tasación).
 

@@ -11,7 +11,7 @@ export const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgres://cr
 // La terminal puede traer claves reales (p. ej. después de `source apps/api/.env.storage`): se descartan todas las de
 // servicios externos, así un test nunca sube archivos, manda mensajes ni borra nada fuera de la máquina.
 // Se conservan solo las de la base de prueba (TEST_DATABASE_URL, DATABASE_SSL, DATABASE_POOL_MAX, DATABASE_CA_CERT).
-const OUTSIDE = /^(S3_|STORAGE_|UPLOAD_DIR|WHATSAPP_|GOOGLE_|SMTP_|ANTHROPIC_|OPENAI_|LLM_|TRANSCRIBE_|TOKEN_ENCRYPTION_KEY|META_|LINKEDIN_|TIKTOK_|AVM_|ADMIN_|JWT_|PUBLIC_URL|WEB_ORIGIN|RENDER_|TRUST_PROXY|AUTO_ASSIGN_LEADS|DB_SYNC|DATABASE_URL$)/;
+const OUTSIDE = /^(S3_|STORAGE_|UPLOAD_DIR|WHATSAPP_|GOOGLE_|SMTP_|ANTHROPIC_|OPENAI_|LLM_|CONTENT_LLM_|CLOUDFLARE_|IMAGE_AI_|TRANSCRIBE_|TOKEN_ENCRYPTION_KEY|META_|LINKEDIN_|TIKTOK_|AVM_|ADMIN_|JWT_|PUBLIC_URL|WEB_ORIGIN|RENDER_|TRUST_PROXY|AUTO_ASSIGN_LEADS|DB_SYNC|DATABASE_URL$)/;
 for (const key of Object.keys(process.env)) if (OUTSIDE.test(key)) delete process.env[key];
 
 Object.assign(process.env, {

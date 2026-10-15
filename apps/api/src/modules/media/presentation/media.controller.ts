@@ -1,12 +1,20 @@
-import { BadRequestException, Controller, HttpCode, Post, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Post, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { IsIn, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { tmpdir } from 'node:os';
 import { diskStorage, memoryStorage } from 'multer';
 import { UserRole } from '../../auth/domain/user-role.enum';
 import { Roles } from '../../auth/presentation/decorators';
+import { PhotoAiAction, PhotoAiService } from '../application/photo-ai.service';
 import { PhotoCleanupService } from '../application/photo-cleanup.service';
 import { PhotoProcessingService } from '../application/photo-processing.service';
 import { MAX_VIDEO_BYTES, VideoUploadService } from '../application/video-upload.service';
+
+class PhotoAiDto {
+  @IsUrl({ require_tld: false, require_protocol: true }) url: string;
+  @IsIn(['amueblar', 'mejorar', 'ordenar', 'personalizado']) action: PhotoAiAction;
+  @IsOptional() @IsString() @MaxLength(300) instructions?: string;
+}
 
 export const MAX_PHOTOS_PER_REQUEST = 20;
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
@@ -17,7 +25,21 @@ export class MediaController {
     private readonly photos: PhotoProcessingService,
     private readonly cleanup: PhotoCleanupService,
     private readonly videos: VideoUploadService,
+    private readonly photoAi: PhotoAiService,
   ) {}
+
+  /** Si la edición de fotos con IA está configurada (Cloudflare). */
+  @Get('photos/ai')
+  photoAiStatus() {
+    return this.photoAi.status();
+  }
+
+  /** Edita una foto del CRM con IA (amueblar, mejorar, ordenar...). Devuelve una foto NUEVA; la original queda igual. */
+  @Post('photos/ai')
+  @HttpCode(201)
+  editWithAi(@Body() dto: PhotoAiDto) {
+    return this.photoAi.edit(dto);
+  }
 
   /**
    * Un video (MP4 o MOV, hasta 50 MB) en el campo "file", para publicar en redes. Se recibe en un archivo temporal

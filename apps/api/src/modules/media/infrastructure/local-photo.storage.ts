@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { PhotoStorage, StoredPhoto } from '../domain/photo-storage.port';
 
@@ -52,6 +52,14 @@ export class LocalPhotoStorage implements PhotoStorage {
     if (!PHOTO_FILE_NAME.test(fileName)) throw new Error(`Nombre de archivo inesperado: ${fileName}`);
     await unlink(join(this.dir, fileName)).catch((err: NodeJS.ErrnoException) => {
       if (err.code !== 'ENOENT') throw err;
+    });
+  }
+
+  async read(fileName: string): Promise<Buffer | null> {
+    if (!PHOTO_FILE_NAME.test(fileName)) return null;
+    return readFile(join(this.dir, fileName)).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT') return null;
+      throw err;
     });
   }
 

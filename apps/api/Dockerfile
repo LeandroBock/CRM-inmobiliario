@@ -17,6 +17,8 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN npm ci -w apps/api --omit=dev && npm cache clean --force
 COPY --from=build /app/apps/api/dist apps/api/dist
+# Una fuente para escribir la leyenda "Imagen ilustrativa" en las fotos editadas con IA (Alpine no trae ninguna)
+RUN apk add --no-cache font-dejavu
 # Sin root: si alguien aprovechara una falla, no tiene permisos sobre el sistema del contenedor.
 RUN mkdir -p /app/uploads && chown node:node /app/uploads
 USER node

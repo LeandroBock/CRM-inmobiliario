@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { requiredEnv, s3Bucket, usesS3 } from '../../shared/infrastructure/storage-config';
+import { PhotoAiService } from './application/photo-ai.service';
+import { ImageAiClient } from './infrastructure/image-ai.client';
 import { PhotoCleanupService } from './application/photo-cleanup.service';
 import { PhotoProcessingService } from './application/photo-processing.service';
 import { PHOTO_STORAGE } from './domain/photo-storage.port';
@@ -13,7 +15,7 @@ import { MediaController } from './presentation/media.controller';
 
 @Module({
   controllers: [MediaController],
-  providers: [PhotoProcessingService, PhotoCleanupService, VideoUploadService, {
+  providers: [PhotoProcessingService, PhotoCleanupService, VideoUploadService, PhotoAiService, ImageAiClient, {
       provide: VIDEO_STORAGE,
       inject: [ConfigService],
       useFactory: (config: ConfigService) =>
