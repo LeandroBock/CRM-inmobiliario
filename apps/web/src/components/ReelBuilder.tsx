@@ -50,6 +50,7 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
   });
   const [seconds, setSeconds] = useState(3);
   const [fit, setFit] = useState<ReelSpec['fit']>('completa');
+  const [motion, setMotion] = useState<ReelSpec['motion']>('recorrido');
   const [kicker, setKicker] = useState(property.operation === 'alquiler' ? 'EN ALQUILER' : 'EN VENTA');
   const [title, setTitle] = useState(property.title);
   const [showPrice, setShowPrice] = useState(true);
@@ -79,6 +80,7 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
       slides: selected.map((u) => ({ imageUrl: u, caption: captions[u] ?? '' })),
       secondsPerSlide: seconds,
       fit,
+      motion,
       kicker,
       title,
       priceTag: showPrice ? formatUsd(property.priceUsd) : '',
@@ -87,7 +89,7 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
       logoUrl: brand.logoUrl,
       brandColor: brand.brandColor,
     }),
-    [selected, captions, seconds, fit, kicker, title, showPrice, property.priceUsd, brand],
+    [selected, captions, seconds, fit, motion, kicker, title, showPrice, property.priceUsd, brand],
   );
 
   // Vista previa en vivo: la misma función que dibuja el video, en un canvas chico que se repite
@@ -268,8 +270,15 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
                 {[2.5, 3, 4, 5].map((s) => <option key={s} value={s}>{String(s).replace('.', ',')} s</option>)}
               </select>
             </Field>
+            <Field label="Movimiento">
+              <select style={input} value={motion} onChange={(e) => setMotion(e.target.value as ReelSpec['motion'])} aria-label="Movimiento">
+                <option value="recorrido">Recorrido (la cámara recorre la foto)</option>
+                <option value="suave">Zoom suave</option>
+                <option value="quieto">Sin movimiento</option>
+              </select>
+            </Field>
             <Field label="Encuadre">
-              <select style={input} value={fit} onChange={(e) => setFit(e.target.value as ReelSpec['fit'])} aria-label="Encuadre">
+              <select style={input} value={fit} disabled={motion === 'recorrido'} title={motion === 'recorrido' ? 'En el recorrido la foto siempre llena la pantalla' : undefined} onChange={(e) => setFit(e.target.value as ReelSpec['fit'])} aria-label="Encuadre">
                 <option value="completa">Foto completa (fondo difuminado)</option>
                 <option value="llenar">Llenar la pantalla (recorta los costados)</option>
               </select>

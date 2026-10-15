@@ -35,6 +35,11 @@ export interface ReelSpec {
    * 'llenar': la foto ocupa toda la pantalla vertical (recorta los costados).
    */
   fit: 'completa' | 'llenar';
+  /**
+   * 'suave': zoom leve. 'recorrido': la foto llena la pantalla y la cámara la recorre de un lado al otro
+   * (se ve el ambiente entero, como un video). 'quieto': sin movimiento.
+   */
+  motion: 'suave' | 'recorrido' | 'quieto';
   /** Arriba de la portada: "EN VENTA" / "EN ALQUILER". */
   kicker: string;
   title: string;
@@ -74,8 +79,10 @@ const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const ease = (p: number) => p * p * (3 - 2 * p);
 
 /** Dibuja la foto según el encuadre elegido, con zoom y desplazamiento suaves ("efecto Ken Burns"). */
-function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, progress: number, variant: number, fit: ReelSpec['fit']) {
-  if (fit === 'llenar') return drawCover(ctx, img, progress, variant);
+function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, progress: number, variant: number, spec: ReelSpec) {
+  if (spec.motion === 'recorrido') return drawPan(ctx, img, progress, variant);
+  if (spec.motion === 'quieto') progress = 0.5;
+  if (spec.fit === 'llenar') return drawCover(ctx, img, progress, variant);
   // Fondo: la misma foto, agrandada, difuminada y oscurecida
   ctx.save();
   ctx.filter = 'blur(36px) brightness(0.55)';
@@ -100,6 +107,20 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, progres
   const dir = variant % 4 < 2 ? 1 : -1;
   const panX = ((w - WIDTH) / 2) * (dir * (progress - 0.5));
   ctx.drawImage(img, (WIDTH - w) / 2 + panX, (HEIGHT - h) / 2, w, h);
+}
+
+/**
+ * Recorrido: la foto llena el alto y la cámara va de un costado al otro (alternando el sentido), con un acercamiento
+ * mínimo. En una foto horizontal muestra el ambiente entero; en una vertical, sube o baja.
+ */
+function drawPan(ctx: CanvasRenderingContext2D, img: HTMLImageElement, progress: number, variant: number) {
+  const base = Math.max(WIDTH / img.naturalWidth, HEIGHT / img.naturalHeight) * (1.04 + 0.04 * progress);
+  const w = img.naturalWidth * base;
+  const h = img.naturalHeight * base;
+  const p = variant % 2 === 0 ? progress : 1 - progress;
+  const x = -(w - WIDTH) * p;
+  const y = -(h - HEIGHT) * (w - WIDTH > h - HEIGHT ? 0.5 : p);
+  ctx.drawImage(img, x, y, w, h);
 }
 
 /** Corta el texto en renglones que entren en el ancho. */
@@ -155,11 +176,11 @@ export function drawFrame(ctx: CanvasRenderingContext2D, spec: ReelSpec, images:
     const i = Math.min(n - 1, Math.floor(local / spec.secondsPerSlide));
     const within = t < INTRO ? 0 : local - i * spec.secondsPerSlide;
     // La primera foto también se ve durante la portada: su movimiento abarca los dos tramos
-    drawPhoto(ctx, images.slides[i], i === 0 ? clamp(t / (INTRO + spec.secondsPerSlide)) : clamp(within / spec.secondsPerSlide), i, spec.fit);
+    drawPhoto(ctx, images.slides[i], i === 0 ? clamp(t / (INTRO + spec.secondsPerSlide)) : clamp(within / spec.secondsPerSlide), i, spec);
     const fadeStart = spec.secondsPerSlide - FADE;
     if (t >= INTRO && within > fadeStart && i < n - 1) {
       ctx.globalAlpha = ease(clamp((within - fadeStart) / FADE));
-      drawPhoto(ctx, images.slides[i + 1], 0, i + 1, spec.fit);
+      drawPhoto(ctx, images.slides[i + 1], 0, i + 1, spec);
       ctx.globalAlpha = 1;
     }
 
