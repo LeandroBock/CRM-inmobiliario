@@ -30,6 +30,6 @@ import { MediaController } from './presentation/media.controller';
           ? new S3PhotoStorage(s3Bucket(config, 'S3_PUBLIC_BUCKET'), requiredEnv(config, 'S3_PUBLIC_URL').replace(/\/+$/, ''))
           : new LocalPhotoStorage(config),
     }],
-  exports: [VIDEO_STORAGE],
+  exports: [VIDEO_STORAGE, PHOTO_STORAGE],
 })
 export class MediaModule {}

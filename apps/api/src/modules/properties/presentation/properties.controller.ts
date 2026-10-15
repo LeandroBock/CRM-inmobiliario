@@ -1,10 +1,28 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile } from '@nestjs/common';
+import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, IsUrl, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { MAX_SHEET_PHOTOS, PropertySheetService } from '../application/property-sheet.service';
 import { PropertiesService } from '../application/properties.service';
 import { CreatePropertyDto, PropertyQuery, UpdatePropertyDto } from './property.dto';
 
+const URL_OPTS = { require_tld: false, require_protocol: true, protocols: ['http', 'https'] };
+
+class SheetDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_SHEET_PHOTOS) @IsUrl(URL_OPTS, { each: true }) photoUrls?: string[];
+  @IsOptional() @IsString() @MaxLength(80) agencyName?: string;
+  @IsOptional() @IsString() @MaxLength(120) contact?: string;
+  @IsOptional() @Matches(/^#[0-9a-fA-F]{6}$/) brandColor?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsUrl(URL_OPTS) logoUrl?: string | null;
+  @IsOptional() @IsBoolean() showAddress?: boolean;
+  @IsOptional() @IsBoolean() showPrice?: boolean;
+  @IsOptional() @IsBoolean() showArs?: boolean;
+}
+
 @Controller('properties')
 export class PropertiesController {
-  constructor(private readonly properties: PropertiesService) {}
+  constructor(
+    private readonly properties: PropertiesService,
+    private readonly sheets: PropertySheetService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreatePropertyDto) {
@@ -27,6 +45,14 @@ export class PropertiesController {
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.properties.findOne(id);
+  }
+
+  /** Ficha en PDF para mandar por WhatsApp o imprimir. POST porque lleva opciones (fotos, marca, qué mostrar). */
+  @Post(':id/sheet')
+  @HttpCode(200)
+  async sheet(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SheetDto) {
+    const { pdf, fileName } = await this.sheets.build(id, dto);
+    return new StreamableFile(pdf, { type: 'application/pdf', disposition: `attachment; filename="${fileName}"` });
   }
 
   @Patch(':id')

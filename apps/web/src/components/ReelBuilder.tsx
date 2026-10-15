@@ -4,24 +4,8 @@ import { OPERATIONS, formatUsd, labelOf, type Property } from '../api/properties
 import type { AiReelText } from '../api/social';
 import AiAssist, { type AiRequest } from './AiAssist';
 import { HEIGHT, WIDTH, canRenderMp4, drawFrame, loadImages, renderReel, totalDuration, type LoadedImages, type ReelSpec } from '../reel/reel';
+import { useBrand } from '../brand';
 import { btnLink, btnPrimary, btnSecondary, colors, input } from '../styles';
-
-/** La marca (logo, nombre, contacto, color) se recuerda en este navegador para no cargarla cada vez. */
-const BRAND_KEY = 'crm_reel_brand';
-interface Brand {
-  agencyName: string;
-  contact: string;
-  logoUrl: string | null;
-  brandColor: string;
-}
-function loadBrand(): Brand {
-  try {
-    const b = JSON.parse(localStorage.getItem(BRAND_KEY) ?? '{}');
-    return { agencyName: b.agencyName ?? '', contact: b.contact ?? 'Escribinos por WhatsApp', logoUrl: b.logoUrl ?? null, brandColor: b.brandColor ?? '#2f5bea' };
-  } catch {
-    return { agencyName: '', contact: 'Escribinos por WhatsApp', logoUrl: null, brandColor: '#2f5bea' };
-  }
-}
 
 /** Textos sugeridos para cada foto, con los datos de la propiedad (editables). */
 function suggestCaptions(p: Property, count: number): string[] {
@@ -54,7 +38,7 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
   const [kicker, setKicker] = useState(property.operation === 'alquiler' ? 'EN ALQUILER' : 'EN VENTA');
   const [title, setTitle] = useState(property.title);
   const [showPrice, setShowPrice] = useState(true);
-  const [brand, setBrand] = useState<Brand>(loadBrand);
+  const [brand, setBrand] = useBrand();
   const [music, setMusic] = useState<File | null>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -67,13 +51,6 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
   useEffect(() => {
     canRenderMp4().then(setSupported);
   }, []);
-  useEffect(() => {
-    try {
-      localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
-    } catch {
-      /* sin storage: se vuelve a cargar la próxima vez */
-    }
-  }, [brand]);
 
   const spec: ReelSpec = useMemo(
     () => ({

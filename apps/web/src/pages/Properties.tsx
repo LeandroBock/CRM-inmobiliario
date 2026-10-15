@@ -12,6 +12,7 @@ import {
   type Property,
 } from '../api/properties';
 import Appraisal from '../components/Appraisal';
+import PropertySheet from '../components/PropertySheet';
 import Modal from '../components/Modal';
 import SocialPostForm from '../components/SocialPostForm';
 import PropertyForm from '../components/PropertyForm';
@@ -43,6 +44,8 @@ export default function Properties() {
   const [publishing, setPublishing] = useState<{ property: Property; videoUrl?: string } | null>(null);
   /** Armar un reel con las fotos de la propiedad (al terminar, abre la publicación con el video). */
   const [makingReel, setMakingReel] = useState<Property | null>(null);
+  /** Ficha en PDF abierta. */
+  const [sheetFor, setSheetFor] = useState<Property | null>(null);
   const [socialConfigured, setSocialConfigured] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -231,6 +234,10 @@ export default function Properties() {
                     Reel
                   </button>
                   {' · '}
+                  <button style={btnLink} onClick={() => setSheetFor(p)}>
+                    Ficha
+                  </button>
+                  {' · '}
                   <button style={btnLink} onClick={() => setEditing(p)}>
                     Editar
                   </button>
@@ -257,6 +264,12 @@ export default function Properties() {
             Siguiente →
           </button>
         </div>
+      )}
+
+      {sheetFor !== null && (
+        <Modal title={`Ficha PDF: ${sheetFor.title}`} onClose={() => setSheetFor(null)}>
+          <PropertySheet property={sheetFor} onClose={() => setSheetFor(null)} />
+        </Modal>
       )}
 
       {makingReel !== null && (

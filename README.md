@@ -215,6 +215,13 @@ npm test                  # desde la raíz (o npm test -w apps/api)
 
 Correrlos antes de cada deploy: si algo falla, no subir.
 
+## Ficha PDF de la propiedad
+
+**Propiedades → Ficha** arma un PDF A4 para mandar por WhatsApp o imprimir: portada con la foto principal, precio en
+USD (opcional la referencia en pesos), datos en recuadros, comodidades y descripción, y una segunda hoja con hasta 6
+fotos más. Lleva la marca de la inmobiliaria (logo, nombre, color y contacto, los mismos de los reels). Por defecto
+muestra solo barrio y ciudad; la dirección exacta es opcional. `POST /properties/:id/sheet` (pdfkit, en el servidor).
+
 ## Fotos con IA (Cloudflare, gratis)
 
 En cualquier foto subida al CRM, **✨ IA** abre el editor: **Amueblar** (amoblamiento virtual de un ambiente vacío),

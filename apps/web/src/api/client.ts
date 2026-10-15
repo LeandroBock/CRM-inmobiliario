@@ -67,8 +67,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 }
 
 /** Archivos que requieren sesión (audios y fotos de clientes): no se pueden pedir con un <img src> común. */
-export async function apiFetchBlob(path: string): Promise<Blob> {
-  return (await request(path)).blob();
+export async function apiFetchBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  return (await request(path, init)).blob();
 }
 
 /**
