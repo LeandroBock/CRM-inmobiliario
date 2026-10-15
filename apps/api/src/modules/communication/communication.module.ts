@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../auth/domain/user.entity';
 import { Lead } from '../leads/domain/lead.entity';
 import { Property } from '../properties/domain/property.entity';
+import { PropertiesModule } from '../properties/properties.module';
 import { VisitsModule } from '../visits/visits.module';
 import { LeadEngineModule } from '../lead-engine/lead-engine.module';
 import { LeadsModule } from '../leads/leads.module';
@@ -23,7 +24,7 @@ import { LeadMessagesController } from './presentation/lead-messages.controller'
 import { WhatsAppWebhookController } from './presentation/whatsapp.webhook.controller';
 
 @Module({
-  imports: [HttpModule, VisitsModule, LeadEngineModule, LeadsModule, NotificationsModule, TypeOrmModule.forFeature([Lead, ChatHistory, Property, User])],
+  imports: [HttpModule, VisitsModule, PropertiesModule, LeadEngineModule, LeadsModule, NotificationsModule, TypeOrmModule.forFeature([Lead, ChatHistory, Property, User])],
   controllers: [WhatsAppWebhookController, LeadMessagesController, ChatMediaController],
   providers: [
     ConversationService,

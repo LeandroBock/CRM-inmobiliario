@@ -35,6 +35,31 @@ export class WhatsAppClient {
     return this.send(to, { type: 'template', template: { name, language: { code: language }, components } });
   }
 
+  /** Documento (PDF) ya subido con uploadMedia. `caption` es el texto que acompaña al archivo. */
+  sendDocument(to: string, mediaId: string, filename: string, caption?: string): Promise<string | undefined> {
+    return this.send(to, { type: 'document', document: { id: mediaId, filename, ...(caption ? { caption } : {}) } });
+  }
+
+  /** Sube un archivo a WhatsApp para mandarlo después (Meta lo guarda 30 días). Devuelve el id del archivo. */
+  async uploadMedia(data: Buffer, mimeType: string, filename: string): Promise<string> {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mimeType);
+    form.append('file', new Blob([new Uint8Array(data)], { type: mimeType }), filename);
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ id: string }>(`${graphBase(this.config)}/${requiredSetting(this.config, 'WHATSAPP_PHONE_NUMBER_ID')}/media`, form, {
+          headers: { Authorization: `Bearer ${this.token}` },
+        }),
+      );
+      return res.data.id;
+    } catch (err: any) {
+      const reason = err?.response?.data?.error?.message ?? (err as Error).message;
+      this.logger.error(`No se pudo subir el archivo ${filename} a WhatsApp: ${reason}`);
+      throw new WhatsAppSendError(reason);
+    }
+  }
+
   private async send(to: string, message: Record<string, unknown>): Promise<string | undefined> {
     try {
       const res = await firstValueFrom(

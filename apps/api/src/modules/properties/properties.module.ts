@@ -13,6 +13,6 @@ import { PropertiesController } from './presentation/properties.controller';
   imports: [HttpModule, TypeOrmModule.forFeature([Property]), GoogleCalendarModule, MediaModule],
   controllers: [PropertiesController],
   providers: [PropertiesService, FxService, PropertySheetService],
-  exports: [PropertiesService, FxService],
+  exports: [PropertiesService, FxService, PropertySheetService],
 })
 export class PropertiesModule {}

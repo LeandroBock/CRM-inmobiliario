@@ -43,7 +43,9 @@ export default function PhotoManager({ urls, setUrls, onBusyChange, max = MAX_PH
   /** Foto abierta en el editor con IA. */
   const [aiPhoto, setAiPhoto] = useState<string | null>(null);
 
-  useEffect(() => onBusyChange(pending > 0), [pending, onBusyChange]);
+  useEffect(() => {
+    onBusyChange(pending > 0);
+  }, [pending, onBusyChange]);
 
   async function upload(fileList: FileList | File[]) {
     setError(null);

@@ -531,6 +531,37 @@ describe('Asistente de WhatsApp', () => {
       expect((await chatOf(lead.id)).filter((c) => c.role === 'agent')).toHaveLength(0);
     });
 
+    it('manda la ficha PDF de una propiedad como documento', async () => {
+      const lead = await leadWithChat();
+      const property = await createProperty(app, agent, 'Depto Centro');
+      const res = await http(app)
+        .post(`/leads/${lead.id}/messages/sheet`)
+        .set(agent.auth)
+        .send({ propertyId: property.id, caption: ' Te paso la ficha ', agencyName: 'Inmobiliaria Ejemplo' })
+        .expect(201);
+
+      const [upload] = whatsapp.uploads;
+      expect(upload.mimeType).toBe('application/pdf');
+      expect(upload.data.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(whatsapp.documents).toEqual([{ to: CLIENT, mediaId: upload.mediaId, filename: 'ficha-depto-centro.pdf', caption: 'Te paso la ficha' }]);
+      expect(res.body).toMatchObject({ role: 'agent', content: '📄 Ficha: Depto Centro\nTe paso la ficha', authorName: 'Ana' });
+      expect((await leadByPhone())!.aiPaused).toBe(true);
+
+      // Fuera de la ventana de 24 h, tampoco
+      await db().query(`UPDATE chat_history SET created_at = now() - interval '25 hours' WHERE lead_id = $1`, [lead.id]);
+      await http(app).post(`/leads/${lead.id}/messages/sheet`).set(agent.auth).send({ propertyId: property.id }).expect(409);
+      await http(app).post(`/leads/${lead.id}/messages/sheet`).set(agent.auth).send({ propertyId: 'x' }).expect(400);
+    });
+
+    it('si WhatsApp no acepta el PDF, avisa y no se guarda nada', async () => {
+      const lead = await leadWithChat();
+      const property = await createProperty(app, agent);
+      whatsapp.failSending = true;
+      const res = await http(app).post(`/leads/${lead.id}/messages/sheet`).set(agent.auth).send({ propertyId: property.id }).expect(502);
+      expect(res.body.message).toMatch(/WhatsApp no aceptó la ficha/);
+      expect((await chatOf(lead.id)).filter((c) => c.role === 'agent')).toHaveLength(0);
+    });
+
     it('mensaje vacío: 400', async () => {
       const lead = await leadWithChat();
       await send(lead.id, '   ').expect(400);

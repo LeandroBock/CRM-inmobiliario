@@ -18,11 +18,12 @@ import {
   type Match,
   type Visit,
 } from '../api/leads';
-import { OPERATIONS, PROPERTY_TYPES, formatArs, formatUsd, labelOf } from '../api/properties';
+import { OPERATIONS, PROPERTY_TYPES, formatArs, formatUsd, labelOf, type Property } from '../api/properties';
 import { getTeam, type TeamMember } from '../api/team';
 import { btnLink, btnPrimary, btnSecondary, card, colors, input } from '../styles';
 import LeadForm from './LeadForm';
 import Modal from './Modal';
+import SendSheet from './SendSheet';
 import { NewVisitForm, VisitActions, VisitStatusChip } from './Visits';
 
 interface Props {
@@ -252,7 +253,7 @@ export default function LeadDetail({ leadId, onBack, onChanged, onDeleted }: Pro
                 </label>
               </div>
               <ChatThread messages={chats} />
-              <Composer lead={lead} onSent={onMessageSent} />
+              <Composer lead={lead} onSent={onMessageSent} suggested={(matches ?? []).filter((m) => m.feedback !== 'no_me_interesa').map((m) => m.property)} />
             </section>
 
             <section style={{ ...card, padding: 0, minWidth: 0 }}>
@@ -289,7 +290,9 @@ export default function LeadDetail({ leadId, onBack, onChanged, onDeleted }: Pro
 
 function ChatThread({ messages }: { messages: ChatMessage[] | null }) {
   const bottom = useRef<HTMLDivElement>(null);
-  useEffect(() => bottom.current?.scrollIntoView({ block: 'end' }), [messages]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: 'end' }); // con llaves: en Chrome nuevo devuelve una promesa y React la tomaría como limpieza
+  }, [messages]);
 
   if (messages === null) return <p style={emptyText}>Cargando…</p>;
   if (messages.length === 0) {
@@ -424,8 +427,9 @@ interface MessagingWindow {
  * Respuesta del asesor por WhatsApp. Enter envía; Shift+Enter hace un salto de línea.
  * Respeta la ventana de 24 h: fuera de ella solo se puede mandar la plantilla aprobada.
  */
-function Composer({ lead, onSent }: { lead: Lead; onSent: (m: ChatMessage) => void }) {
+function Composer({ lead, onSent, suggested }: { lead: Lead; onSent: (m: ChatMessage) => void; suggested: Property[] }) {
   const [text, setText] = useState('');
+  const [sendingSheet, setSendingSheet] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [win, setWin] = useState<MessagingWindow | null>(null);
@@ -515,6 +519,16 @@ function Composer({ lead, onSent }: { lead: Lead; onSent: (m: ChatMessage) => vo
           {sending ? 'Enviando…' : 'Enviar'}
         </button>
       </div>
+      {!closed && (
+        <button type="button" style={{ ...btnLink, fontSize: 13, marginTop: 6 }} onClick={() => setSendingSheet(true)}>
+          📄 Mandar ficha de una propiedad
+        </button>
+      )}
+      {sendingSheet && (
+        <Modal title="Mandar ficha por WhatsApp" onClose={() => setSendingSheet(false)}>
+          <SendSheet leadId={lead.id} suggested={suggested} onSent={onSent} onClose={() => setSendingSheet(false)} />
+        </Modal>
+      )}
       {error ? (
         <p role="alert" style={{ color: colors.danger, fontSize: 13, margin: '6px 0 0' }}>
           {error}

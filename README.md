@@ -221,6 +221,8 @@ Correrlos antes de cada deploy: si algo falla, no subir.
 USD (opcional la referencia en pesos), datos en recuadros, comodidades y descripción, y una segunda hoja con hasta 6
 fotos más. Lleva la marca de la inmobiliaria (logo, nombre, color y contacto, los mismos de los reels). Por defecto
 muestra solo barrio y ciudad; la dirección exacta es opcional. `POST /properties/:id/sheet` (pdfkit, en el servidor).
+Desde el chat de un lead, **📄 Mandar ficha de una propiedad** se la manda por WhatsApp como documento (primero
+aparecen las propiedades sugeridas para ese cliente). Rige la ventana de 24 h, como cualquier mensaje.
 
 ## Fotos con IA (Cloudflare, gratis)
 

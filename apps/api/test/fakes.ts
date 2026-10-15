@@ -58,6 +58,21 @@ export class FakeWhatsApp {
     return file;
   }
 
+  documents: { to: string; mediaId: string; filename: string; caption?: string }[] = [];
+  uploads: { mediaId: string; data: Buffer; mimeType: string; filename: string }[] = [];
+
+  async uploadMedia(data: Buffer, mimeType: string, filename: string) {
+    if (this.failSending) throw new WhatsAppSendError('(#100) Invalid parameter');
+    const mediaId = `media.${++this.seq}`;
+    this.uploads.push({ mediaId, data, mimeType, filename });
+    return mediaId;
+  }
+
+  async sendDocument(to: string, mediaId: string, filename: string, caption?: string) {
+    this.documents.push({ to, mediaId, filename, caption });
+    return `wamid.documento.${++this.seq}`;
+  }
+
   async markAsRead(wamid: string) {
     this.read.push(wamid);
   }
@@ -66,6 +81,8 @@ export class FakeWhatsApp {
     this.sent = [];
     this.templates = [];
     this.read = [];
+    this.documents = [];
+    this.uploads = [];
     this.media.clear();
     this.failSending = false;
   }

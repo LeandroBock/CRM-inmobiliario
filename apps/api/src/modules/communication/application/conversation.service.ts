@@ -17,6 +17,8 @@ import { User } from '../../auth/domain/user.entity';
 import { MatchingService } from '../../lead-engine/application/matching.service';
 import { LeadAssignmentService } from '../../leads/application/lead-assignment.service';
 import { Lead } from '../../leads/domain/lead.entity';
+import { PropertySheetService, SheetOptions } from '../../properties/application/property-sheet.service';
+import { Property } from '../../properties/domain/property.entity';
 import { OperationType } from '../../properties/domain/property.enums';
 import { NotificationsService } from '../../notifications/application/notifications.service';
 import { NotificationType } from '../../notifications/domain/notification.entity';
@@ -157,6 +159,8 @@ export class ConversationService implements OnApplicationBootstrap, OnModuleDest
     private readonly assignment: LeadAssignmentService,
     private readonly media: ChatMediaStorage,
     private readonly transcriber: AudioTranscriber,
+    private readonly sheets: PropertySheetService,
+    @InjectRepository(Property) private readonly propertyRepo: Repository<Property>,
   ) {}
 
   async handleIncoming(msg: IncomingMessage): Promise<void> {
@@ -549,34 +553,59 @@ export class ConversationService implements OnApplicationBootstrap, OnModuleDest
 
   /** Mensaje escrito por un asesor desde el CRM. Pausa al asistente para que no se pisen. */
   async sendAgentMessage(leadId: string, text: string, userId: string): Promise<ChatHistory> {
+    const lead = await this.leadForAgentMessage(leadId);
+    let wamid: string | undefined;
+    try {
+      wamid = await this.whatsapp.sendText(lead.phone!.replace(/^\+/, ''), text);
+    } catch (err) {
+      if (err instanceof WhatsAppSendError) throw new BadGatewayException(`WhatsApp no aceptó el mensaje: ${err.message}`);
+      throw err;
+    }
+    return this.saveAgentMessage(lead, userId, { content: text, externalMessageId: wamid });
+  }
+
+  /** Manda la ficha PDF de una propiedad como documento de WhatsApp, con un texto opcional. */
+  async sendPropertySheet(leadId: string, propertyId: string, options: SheetOptions, caption: string | undefined, userId: string): Promise<ChatHistory> {
+    const lead = await this.leadForAgentMessage(leadId);
+    const property = await this.propertyRepo.findOne({ select: { id: true, title: true }, where: { id: propertyId } });
+    if (!property) throw new NotFoundException('Propiedad no encontrada');
+    const { pdf, fileName } = await this.sheets.build(propertyId, options);
+
+    let wamid: string | undefined;
+    try {
+      const mediaId = await this.whatsapp.uploadMedia(pdf, 'application/pdf', fileName);
+      wamid = await this.whatsapp.sendDocument(lead.phone!.replace(/^\+/, ''), mediaId, fileName, caption);
+    } catch (err) {
+      if (err instanceof WhatsAppSendError) throw new BadGatewayException(`WhatsApp no aceptó la ficha: ${err.message}`);
+      throw err;
+    }
+    const content = [`📄 Ficha: ${property.title}`, caption].filter(Boolean).join('\n');
+    return this.saveAgentMessage(lead, userId, { content, externalMessageId: wamid, extractedData: { sheet: { propertyId, fileName } } });
+  }
+
+  /** Lead al que el asesor puede escribirle ahora (tiene teléfono y la ventana de 24 h está abierta). */
+  private async leadForAgentMessage(leadId: string): Promise<Lead> {
     const lead = await this.leads.findOne({ where: { id: leadId } });
     if (!lead) throw new NotFoundException('Lead no encontrado');
     if (!lead.phone) throw new UnprocessableEntityException('El lead no tiene teléfono cargado');
-
     if (!(await this.windowStatus(leadId)).open) {
       throw new ConflictException(
         'WhatsApp solo deja escribir libremente hasta 24 h después del último mensaje del cliente. ' +
           'Para retomar la conversación mandale la plantilla de saludo; cuando conteste, se reabre la ventana.',
       );
     }
+    return lead;
+  }
 
-    let wamid: string | undefined;
-    try {
-      wamid = await this.whatsapp.sendText(lead.phone.replace(/^\+/, ''), text);
-    } catch (err) {
-      if (err instanceof WhatsAppSendError) throw new BadGatewayException(`WhatsApp no aceptó el mensaje: ${err.message}`);
-      throw err;
-    }
-
+  private async saveAgentMessage(lead: Lead, userId: string, data: Partial<ChatHistory>): Promise<ChatHistory> {
     const author = await this.users.findOne({ where: { id: userId } });
     const saved = await this.chats.save(
       this.chats.create({
         lead,
         channel: ChatChannel.WHATSAPP,
         role: ChatRole.AGENT,
-        content: text,
         authorName: author?.fullName ?? author?.email,
-        externalMessageId: wamid,
+        ...data,
       }),
     );
     lead.aiPaused = true;
