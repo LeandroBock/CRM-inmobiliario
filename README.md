@@ -224,6 +224,25 @@ muestra solo barrio y ciudad; la dirección exacta es opcional. `POST /propertie
 Desde el chat de un lead, **📄 Mandar ficha de una propiedad** se la manda por WhatsApp como documento (primero
 aparecen las propiedades sugeridas para ese cliente). Rige la ventana de 24 h, como cualquier mensaje.
 
+## Alquileres
+
+Pestaña **Alquileres**: contratos con inquilino, propietario, plazo, moneda (pesos o dólares), día de pago, depósito y
+comisión de administración. Desde el DNU 70/2023 el índice y la periodicidad se pactan libremente, así que cada contrato
+elige: **ICL** (BCRA), **IPC** (INDEC), **porcentaje fijo** o **sin índice** (monto a mano), cada 1 a 12 meses.
+
+- **Índices automáticos**: todos los días a las 8:30 se descargan el ICL (API del BCRA, variable 40, diario) y el IPC
+  (API de series de datos.gob.ar, `148.3_INIVELNAL_DICI_M_26`). Si una API falla, se reintenta al día siguiente.
+  La serie pública del IPC llega con atraso y a veces con meses vacíos: un admin puede cargar el valor a mano (no lo pisa
+  la descarga automática).
+- **Cálculo**: ICL = valor del día del ajuste / valor del día del ajuste anterior (método del BCRA). IPC = variación de
+  los últimos N meses publicados antes del ajuste (acepta hasta un mes de atraso). El monto se puede corregir antes de
+  aplicarlo, queda el historial con los valores usados y el último ajuste se puede deshacer.
+- **Pagos** mes por mes (parciales también); la deuda cuenta los meses vencidos. Al cargar un contrato que ya venía de
+  antes, se puede marcar hasta qué mes está pago.
+- **Avisos** (campana y email a los admins): ajuste a aplicar (7 días antes; se puede aplicar desde 30 días antes),
+  contrato por vencer (60 días) y alquiler impago (se cierra solo al pagar).
+- Una propiedad con contratos no se puede borrar (primero se borra el contrato; solo admin).
+
 ## Cargar en portales (Zonaprop, Argenprop, MercadoLibre)
 
 Zonaprop y Argenprop no tienen API pública (la habilitan a pedido, con convenio), así que por ahora la carga es manual

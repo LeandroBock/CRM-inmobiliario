@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Point } from 'geojson';
@@ -91,6 +91,9 @@ export class PropertiesService {
   }
 
   async remove(id: string): Promise<void> {
+    // Los contratos de alquiler no se borran en cascada (son la historia de cobros): primero hay que borrarlos
+    const [{ count }] = await this.repo.query('SELECT count(*)::int AS count FROM rental_contracts WHERE property_id = $1', [id]);
+    if (count > 0) throw new ConflictException('La propiedad tiene contratos de alquiler cargados: borralos primero en Alquileres');
     await this.calendar.removeEvents({ propertyId: id }); // sus visitas se borran en cascada
     const res = await this.repo.delete(id);
     if (!res.affected) throw new NotFoundException('Propiedad no encontrada');

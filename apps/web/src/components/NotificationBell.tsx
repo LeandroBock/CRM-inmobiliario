@@ -5,10 +5,11 @@ import { btnLink, colors } from '../styles';
 
 interface AppNotification {
   id: string;
-  type: 'visita_por_confirmar' | 'cliente_esperando' | 'lead_caliente' | 'lead_asignado';
+  type: 'visita_por_confirmar' | 'cliente_esperando' | 'lead_caliente' | 'lead_asignado' | 'alquiler_ajuste' | 'alquiler_vence' | 'alquiler_deuda';
   title: string;
   body?: string | null;
   leadId?: string | null;
+  contractId?: string | null;
   readAt?: string | null;
   createdAt: string;
 }
@@ -20,9 +21,12 @@ const TYPE_COLOR: Record<AppNotification['type'], string> = {
   visita_por_confirmar: '#e67700',
   lead_caliente: '#2b8a3e',
   lead_asignado: colors.primary,
+  alquiler_ajuste: '#7048e8',
+  alquiler_vence: '#e67700',
+  alquiler_deuda: '#c92a2a',
 };
 
-export default function NotificationBell({ onOpenLead }: { onOpenLead: (leadId: string) => void }) {
+export default function NotificationBell({ onOpenLead, onOpenContract }: { onOpenLead: (leadId: string) => void; onOpenContract: (contractId: string) => void }) {
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AppNotification[] | null>(null);
@@ -78,6 +82,9 @@ export default function NotificationBell({ onOpenLead }: { onOpenLead: (leadId: 
     if (n.leadId) {
       setOpen(false);
       onOpenLead(n.leadId);
+    } else if (n.contractId) {
+      setOpen(false);
+      onOpenContract(n.contractId);
     }
   }
 

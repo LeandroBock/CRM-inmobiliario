@@ -19,6 +19,7 @@ import { SocialMediaModule } from './modules/social-media/social-media.module';
 import { GoogleCalendarModule } from './modules/google-calendar/google-calendar.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { VisitsModule } from './modules/visits/visits.module';
+import { RentalsModule } from './modules/rentals/rentals.module';
 import { databaseConnection } from './shared/infrastructure/database-config';
 import { HealthController } from './shared/presentation/health.controller';
 
@@ -58,6 +59,7 @@ import { HealthController } from './shared/presentation/health.controller';
     VisitsModule,
     NotificationsModule,
     GoogleCalendarModule,
+    RentalsModule,
   ],
   controllers: [HealthController],
   providers: [

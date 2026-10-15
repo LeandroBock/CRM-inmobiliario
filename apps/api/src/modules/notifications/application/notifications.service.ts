@@ -47,6 +47,29 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Aviso de un contrato de alquiler, para todo el equipo. Mientras siga sin leer se actualiza en vez de repetirse
+   * (el control diario lo vuelve a generar cada día).
+   */
+  async notifyContract(type: NotificationType, title: string, body: string | undefined, contractId: string): Promise<void> {
+    try {
+      const existing = await this.repo.findOne({ where: { type, contractId, readAt: IsNull() } });
+      if (existing) {
+        if (existing.title !== title || existing.body !== body) await this.repo.update(existing.id, { title, body });
+        return;
+      }
+      await this.repo.insert({ type, title, body, contractId, userId: null });
+      void this.email(null, title, body, undefined);
+    } catch (err) {
+      this.logger.error(`No se pudo crear el aviso ${type}: ${(err as Error).message}`);
+    }
+  }
+
+  /** Avisos sin leer de un contrato que ya no corresponden (p. ej. se pagó la deuda): se marcan leídos. */
+  async resolveContract(type: NotificationType, contractId: string): Promise<void> {
+    await this.repo.update({ type, contractId, readAt: IsNull() }, { readAt: new Date() });
+  }
+
   list(userId: string, unreadOnly: boolean): Promise<Notification[]> {
     const qb = this.visibleTo(userId).orderBy('n.createdAt', 'DESC').take(50);
     if (unreadOnly) qb.andWhere('n.read_at IS NULL');

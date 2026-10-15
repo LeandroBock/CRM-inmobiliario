@@ -6,17 +6,19 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Login, { type SessionUser } from './pages/Login';
 import Properties from './pages/Properties';
+import Rentals from './pages/Rentals';
 import Social from './pages/Social';
 import Team from './pages/Team';
 import { btnLink, colors } from './styles';
 
-type PageId = 'panel' | 'propiedades' | 'leads' | 'agenda' | 'redes' | 'equipo';
+type PageId = 'panel' | 'propiedades' | 'leads' | 'agenda' | 'alquileres' | 'redes' | 'equipo';
 
 const PAGES: { id: PageId; label: string; adminOnly?: boolean }[] = [
   { id: 'panel', label: 'Panel' },
   { id: 'propiedades', label: 'Propiedades' },
   { id: 'leads', label: 'Leads' },
   { id: 'agenda', label: 'Agenda' },
+  { id: 'alquileres', label: 'Alquileres' },
   { id: 'redes', label: 'Redes' },
   { id: 'equipo', label: 'Equipo', adminOnly: true },
 ];
@@ -41,6 +43,12 @@ export default function App() {
    * para que la pantalla se vuelva a montar aunque sea el mismo lead.
    */
   const [leadToOpen, setLeadToOpen] = useState<{ id: string; n: number } | null>(entry.lead ? { id: entry.lead, n: 1 } : null);
+  /** Contrato a abrir al entrar a Alquileres desde un aviso. */
+  const [contractToOpen, setContractToOpen] = useState<{ id: string; n: number } | null>(null);
+  const openContract = useCallback((id: string) => {
+    setContractToOpen((prev) => ({ id, n: (prev?.n ?? 0) + 1 }));
+    setPage('alquileres');
+  }, []);
   const openLead = useCallback((id: string) => {
     setLeadToOpen((prev) => ({ id, n: (prev?.n ?? 0) + 1 }));
     setPage('leads');
@@ -95,13 +103,14 @@ export default function App() {
         {PAGES.filter((p) => !p.adminOnly || user.role === 'admin').map((p) => (
           <button key={p.id} onClick={() => {
               setLeadToOpen(null);
+              setContractToOpen(null);
               setPage(p.id);
             }} style={tab(page === p.id)} aria-current={page === p.id ? 'page' : undefined}>
             {p.label}
           </button>
         ))}
         <span style={{ marginLeft: 'auto' }}>
-          <NotificationBell onOpenLead={openLead} />
+          <NotificationBell onOpenLead={openLead} onOpenContract={openContract} />
         </span>
         <span style={{ fontSize: 14, color: colors.muted }}>
           {user.fullName} ·{' '}
@@ -123,6 +132,7 @@ export default function App() {
       {page === 'redes' && <Social isAdmin={user.role === 'admin'} />}
       {/* key: abrir otro lead desde la agenda vuelve a montar la pantalla con ese lead */}
       {page === 'leads' && <Leads key={leadToOpen?.n ?? 0} initialLeadId={leadToOpen?.id ?? null} />}
+      {page === 'alquileres' && <Rentals key={contractToOpen?.n ?? 0} initialContractId={contractToOpen?.id ?? null} isAdmin={user.role === 'admin'} />}
       {page === 'equipo' && user.role === 'admin' && <Team currentUserId={user.id} />}
       {page === 'agenda' && (
         <Agenda
