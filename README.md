@@ -234,6 +234,11 @@ fotos de la propiedad. Si una falla, queda con el motivo para corregir y reinten
 solas (el programador corre cada minuto). Un video puede tardar minutos en procesarse: queda "publicando" y la
 pantalla se actualiza sola. LinkedIn todavía no.
 
+**Con IA (Claude):** en el formulario, **✨ Escribir con IA** arma el texto y los hashtags con los datos de la
+propiedad, y **Reescribir** mejora el texto que ya está (con un tono y con indicaciones como "más corto"). En el armador
+de reels escribe la portada y el texto de cada foto. Hay **Deshacer**. Necesita `ANTHROPIC_API_KEY`; sin ella los
+botones aparecen deshabilitados. `CONTENT_LLM_MODEL` permite usar un modelo más barato solo para esto.
+
 ### Facebook e Instagram
 
 **Configuración (una vez):**

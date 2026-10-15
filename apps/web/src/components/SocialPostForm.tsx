@@ -10,11 +10,13 @@ import {
   isVideoUrl,
   parseHashtags,
   suggestFromProperty,
+  type AiPostText,
   type Platform,
   type SocialPost,
   type TikTokCreatorInfo,
 } from '../api/social';
 import { btnLink, btnPrimary, btnSecondary, colors, input } from '../styles';
+import AiAssist, { type AiRequest } from './AiAssist';
 import Modal from './Modal';
 import PhotoManager from './PhotoManager';
 import VideoUploader from './VideoUploader';
@@ -77,6 +79,8 @@ export default function SocialPostForm({ post, initialProperty = null, initialVi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [buildingReel, setBuildingReel] = useState(false);
+  /** Texto anterior a la última sugerencia de la IA, para "Deshacer". */
+  const [beforeAi, setBeforeAi] = useState<{ copy: string; hashtagsRaw: string } | null>(null);
 
   useEffect(() => {
     apiFetch<Paginated<Property>>('/properties?limit=100')
@@ -128,6 +132,23 @@ export default function SocialPostForm({ post, initialProperty = null, initialVi
   const tooLong = limited && captionLength > INSTAGRAM_MAX_CAPTION;
   const mediaUrls = media === 'video' ? (video ? [video] : []) : photos;
   const privacyOptions = creator?.privacyLevelOptions ?? Object.keys(TIKTOK_PRIVACY);
+
+  async function writeWithAi({ rewrite, tone, instructions }: AiRequest) {
+    const out = await apiFetch<AiPostText>('/social/ai/post', {
+      method: 'POST',
+      body: JSON.stringify({
+        propertyId: propertyId || undefined,
+        platforms: platforms.length ? platforms : ['facebook', 'instagram'],
+        video: media === 'video',
+        tone,
+        instructions: instructions || undefined,
+        current: rewrite ? { copy, hashtags } : undefined,
+      }),
+    });
+    setBeforeAi({ copy, hashtagsRaw });
+    setCopy(out.copy);
+    setHashtagsRaw(out.hashtags.map((h) => `#${h}`).join(' '));
+  }
 
   function togglePlatform(p: Platform) {
     setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
@@ -253,6 +274,21 @@ export default function SocialPostForm({ post, initialProperty = null, initialVi
             )}
           </div>
         </Field>
+
+        <AiAssist
+          canRewrite={Boolean(copy.trim())}
+          blockedReason={!propertyId && !copy.trim() ? 'Elegí una propiedad o escribí algo para que la IA lo mejore' : null}
+          run={writeWithAi}
+          onUndo={
+            beforeAi
+              ? () => {
+                  setCopy(beforeAi.copy);
+                  setHashtagsRaw(beforeAi.hashtagsRaw);
+                  setBeforeAi(null);
+                }
+              : null
+          }
+        />
 
         <Field label="Texto" hint={limited ? `${captionLength}/${INSTAGRAM_MAX_CAPTION} caracteres con los hashtags` : undefined} error={tooLong}>
           <textarea style={{ ...input, minHeight: 150, resize: 'vertical', lineHeight: 1.45 }} value={copy} onChange={(e) => setCopy(e.target.value)} placeholder="¿Qué querés contar?" />

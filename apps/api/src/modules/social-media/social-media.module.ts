@@ -13,6 +13,7 @@ import { SocialPostsService } from './application/social-posts.service';
 import { PublishingService } from './application/publishing.service';
 import { SOCIAL_PUBLISHERS } from './domain/social-publisher.interface';
 import { SocialPost } from './domain/social-post.entity';
+import { ContentLlm } from './infrastructure/content-llm';
 import { LinkedInPublisher } from './infrastructure/linkedin.publisher';
 import { FacebookPublisher, InstagramPublisher } from './infrastructure/meta.publisher';
 import { TikTokPublisher } from './infrastructure/tiktok.publisher';
@@ -23,6 +24,7 @@ import { SocialMediaController } from './presentation/social-media.controller';
   controllers: [SocialMediaController, TikTokController],
   providers: [
     ContentService,
+    ContentLlm,
     PostingTimeOptimizer,
     PublishingService,
     SocialPostsService,

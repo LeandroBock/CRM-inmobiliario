@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { apiFetch, uploadWithProgress } from '../api/client';
 import { OPERATIONS, formatUsd, labelOf, type Property } from '../api/properties';
+import type { AiReelText } from '../api/social';
+import AiAssist, { type AiRequest } from './AiAssist';
 import { HEIGHT, WIDTH, canRenderMp4, drawFrame, loadImages, renderReel, totalDuration, type LoadedImages, type ReelSpec } from '../reel/reel';
 import { btnLink, btnPrimary, btnSecondary, colors, input } from '../styles';
 
@@ -131,6 +133,19 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
       return next;
     });
 
+  const [beforeAi, setBeforeAi] = useState<{ kicker: string; title: string; captions: Record<string, string> } | null>(null);
+  async function writeWithAi({ tone, instructions }: AiRequest) {
+    const out = await apiFetch<AiReelText>('/social/ai/reel', {
+      method: 'POST',
+      body: JSON.stringify({ propertyId: property.id, photoCount: selected.length, tone, instructions: instructions || undefined }),
+    });
+    setBeforeAi({ kicker, title, captions });
+    setResult(null);
+    setKicker(out.kicker);
+    setTitle(out.title);
+    setCaptions((prev) => ({ ...prev, ...Object.fromEntries(selected.map((u, i) => [u, out.captions[i] ?? ''])) }));
+  }
+
   async function uploadLogo(file: File) {
     try {
       const body = new FormData();
@@ -214,6 +229,21 @@ export default function ReelBuilder({ property, onUse, onCancel }: Props) {
               })}
             </div>
           </Field>
+
+          <AiAssist
+            blockedReason={selected.length < 2 ? 'Elegí al menos 2 fotos' : null}
+            run={writeWithAi}
+            onUndo={
+              beforeAi
+                ? () => {
+                    setKicker(beforeAi.kicker);
+                    setTitle(beforeAi.title);
+                    setCaptions(beforeAi.captions);
+                    setBeforeAi(null);
+                  }
+                : null
+            }
+          />
 
           <Field label="Texto de cada foto">
             {selected.map((u, i) => (

@@ -11,13 +11,16 @@ import {
   IsString,
   IsUrl,
   IsIn,
+  IsInt,
   IsUUID,
+  Max,
+  Min,
   MaxLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { PaginationQuery } from '../../../shared/domain/pagination';
-import { ContentService } from '../application/content.service';
+import { ContentService, CopyTone } from '../application/content.service';
 import { PostingTimeOptimizer } from '../application/posting-time.optimizer';
 import { PublishingService } from '../application/publishing.service';
 import { SocialPostsService } from '../application/social-posts.service';
@@ -29,6 +32,30 @@ class GenerateDto {
   @IsEnum(['propiedad', 'oportunidad_inversion']) goal: 'propiedad' | 'oportunidad_inversion';
   @IsOptional() @IsUUID() propertyId?: string;
   @IsOptional() @IsBoolean() scheduleAuto?: boolean;
+}
+
+const TONES: CopyTone[] = ['cercano', 'profesional', 'entusiasta', 'premium'];
+
+class CurrentTextDto {
+  @IsOptional() @IsString() @MaxLength(5000) copy?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(60) @IsString({ each: true }) hashtags?: string[];
+}
+
+class AiPostDto {
+  @IsOptional() @IsUUID() propertyId?: string;
+  @IsArray() @ArrayMinSize(1, { message: 'Elegí al menos una red' }) @IsEnum(SocialPlatform, { each: true }) platforms: SocialPlatform[];
+  @IsOptional() @IsBoolean() video?: boolean;
+  @IsOptional() @IsIn(TONES) tone?: CopyTone;
+  @IsOptional() @IsString() @MaxLength(500) instructions?: string;
+  /** Texto a reescribir. Sin él, la IA escribe uno nuevo. */
+  @IsOptional() @ValidateNested() @Type(() => CurrentTextDto) current?: CurrentTextDto;
+}
+
+class AiReelDto {
+  @IsUUID() propertyId: string;
+  @IsInt() @Min(1) @Max(10) photoCount: number;
+  @IsOptional() @IsIn(TONES) tone?: CopyTone;
+  @IsOptional() @IsString() @MaxLength(500) instructions?: string;
 }
 
 class PlatformOptionsDto {
@@ -145,6 +172,26 @@ export class SocialMediaController {
     const post = await this.socialPosts.findOne(id);
     const when = at ? new Date(at) : await this.content.nextBestSlot(post.platform);
     return this.socialPosts.update(id, { scheduledAt: when });
+  }
+
+  /** Si la IA (Claude) está configurada: sin ANTHROPIC_API_KEY la pantalla deshabilita los botones de IA. */
+  @Get('ai')
+  aiStatus() {
+    return this.content.aiStatus();
+  }
+
+  /** Escribe (o reescribe) el texto y los hashtags de una publicación con IA. */
+  @Post('ai/post')
+  @HttpCode(200)
+  aiPost(@Body() dto: AiPostDto) {
+    return this.content.writePost(dto);
+  }
+
+  /** Textos del reel (portada y uno por foto) con IA. */
+  @Post('ai/reel')
+  @HttpCode(200)
+  aiReel(@Body() dto: AiReelDto) {
+    return this.content.writeReel(dto);
   }
 
   /** Genera un borrador con IA (necesita ANTHROPIC_API_KEY). */

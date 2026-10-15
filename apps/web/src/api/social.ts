@@ -109,3 +109,25 @@ export function suggestFromProperty(p: Property, formatUsd: (n: number) => strin
     .filter((t, i, all) => all.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i);
   return { copy: lines.filter((l) => l !== null).join('\n'), hashtags };
 }
+
+// ---------------------------------------------------------------- Textos con IA (Claude)
+
+export type CopyTone = 'cercano' | 'profesional' | 'entusiasta' | 'premium';
+
+export const COPY_TONES: { value: CopyTone; label: string }[] = [
+  { value: 'cercano', label: 'Cercano' },
+  { value: 'profesional', label: 'Profesional' },
+  { value: 'entusiasta', label: 'Entusiasta' },
+  { value: 'premium', label: 'Premium' },
+];
+
+export interface AiPostText {
+  copy: string;
+  hashtags: string[];
+}
+
+export interface AiReelText {
+  kicker: string;
+  title: string;
+  captions: string[];
+}
