@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { apiFetch } from '../api/client';
 import { formatUsd, type Paginated, type Property } from '../api/properties';
 import {
@@ -15,8 +15,12 @@ import {
   type TikTokCreatorInfo,
 } from '../api/social';
 import { btnLink, btnPrimary, btnSecondary, colors, input } from '../styles';
+import Modal from './Modal';
 import PhotoManager from './PhotoManager';
 import VideoUploader from './VideoUploader';
+
+/** El armador de reels trae la librería de video (~270 KB): se descarga recién al abrirlo. */
+const ReelBuilder = lazy(() => import('./ReelBuilder'));
 
 type When = 'borrador' | 'ahora' | 'programar';
 type Media = 'fotos' | 'video';
@@ -26,6 +30,8 @@ interface Props {
   post: SocialPost | null;
   /** Para "Publicar" desde Propiedades: arranca con esa propiedad, su texto sugerido y sus fotos. */
   initialProperty?: Property | null;
+  /** Video ya generado (p. ej. un reel armado desde Propiedades): arranca como publicación de video. */
+  initialVideoUrl?: string | null;
   /** Redes listas para publicar (claves cargadas; TikTok, con la cuenta conectada). */
   configured: Record<string, boolean>;
   onDone: (message: string) => void;
@@ -41,15 +47,15 @@ function toLocalInput(iso?: string | null): string {
 
 const nameOf = (p: string) => PLATFORMS.find((x) => x.value === p)?.label ?? p;
 
-export default function SocialPostForm({ post, initialProperty = null, configured, onDone, onCancel }: Props) {
+export default function SocialPostForm({ post, initialProperty = null, initialVideoUrl = null, configured, onDone, onCancel }: Props) {
   const editing = post !== null;
-  const initialVideo = post?.mediaUrls.length === 1 && isVideoUrl(post.mediaUrls[0]) ? post.mediaUrls[0] : null;
+  const initialVideo = post?.mediaUrls.length === 1 && isVideoUrl(post.mediaUrls[0]) ? post.mediaUrls[0] : initialVideoUrl;
   const [media, setMedia] = useState<Media>(initialVideo ? 'video' : 'fotos');
   // Nueva: las redes conectadas que sirven para fotos; si todavía no hay ninguna, Facebook e Instagram
   // (los borradores se pueden preparar igual). TikTok se suma al elegir video.
   const [platforms, setPlatforms] = useState<Platform[]>(() => {
     if (editing) return [post.platform as Platform];
-    const connected = PLATFORMS.filter((p) => configured[p.value] && !p.videoOnly).map((p) => p.value);
+    const connected = PLATFORMS.filter((p) => configured[p.value] && (initialVideo || !p.videoOnly)).map((p) => p.value);
     return connected.length ? connected : ['facebook', 'instagram'];
   });
   const [properties, setProperties] = useState<Property[]>(initialProperty ? [initialProperty] : []);
@@ -70,6 +76,7 @@ export default function SocialPostForm({ post, initialProperty = null, configure
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [buildingReel, setBuildingReel] = useState(false);
 
   useEffect(() => {
     apiFetch<Paginated<Property>>('/properties?limit=100')
@@ -262,6 +269,11 @@ export default function SocialPostForm({ post, initialProperty = null, configure
         ) : (
           <Field label="Video">
             <VideoUploader url={video} setUrl={setVideo} onBusyChange={setUploading} />
+            {property && property.photoUrls.length >= 2 && !video && (
+              <button type="button" style={{ ...btnSecondary, marginTop: 8 }} onClick={() => setBuildingReel(true)}>
+                🎬 Crear un reel con las fotos de la propiedad
+              </button>
+            )}
           </Field>
         )}
 
@@ -325,6 +337,21 @@ export default function SocialPostForm({ post, initialProperty = null, configure
           </div>
         </Field>
       </div>
+
+      {buildingReel && property && (
+        <Modal title={`Crear reel: ${property.title}`} onClose={() => setBuildingReel(false)}>
+          <Suspense fallback={<p style={{ padding: 20 }}>Cargando…</p>}>
+            <ReelBuilder
+            property={property}
+            onCancel={() => setBuildingReel(false)}
+            onUse={(url) => {
+              setVideo(url);
+              setBuildingReel(false);
+            }}
+          />
+          </Suspense>
+        </Modal>
+      )}
 
       <div style={footer}>
         <span role="alert" style={{ color: colors.danger, fontSize: 14, flex: 1 }}>

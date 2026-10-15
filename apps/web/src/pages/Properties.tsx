@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { apiFetch } from '../api/client';
 import {
   OPERATIONS,
@@ -16,6 +16,9 @@ import Modal from '../components/Modal';
 import SocialPostForm from '../components/SocialPostForm';
 import PropertyForm from '../components/PropertyForm';
 import { btnLink, btnPrimary, btnSecondary, card, colors, input } from '../styles';
+
+/** El armador de reels trae la librería de video (~270 KB): se descarga recién al abrirlo. */
+const ReelBuilder = lazy(() => import('../components/ReelBuilder'));
 
 const LIMIT = 10;
 
@@ -37,7 +40,9 @@ export default function Properties() {
   /** Tasación abierta: una propiedad cargada, o 'nueva' para tasar algo que no está en el CRM. */
   const [appraising, setAppraising] = useState<Property | 'nueva' | null>(null);
   /** Publicar una propiedad en redes (arranca con su texto sugerido y sus fotos). */
-  const [publishing, setPublishing] = useState<Property | null>(null);
+  const [publishing, setPublishing] = useState<{ property: Property; videoUrl?: string } | null>(null);
+  /** Armar un reel con las fotos de la propiedad (al terminar, abre la publicación con el video). */
+  const [makingReel, setMakingReel] = useState<Property | null>(null);
   const [socialConfigured, setSocialConfigured] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -218,8 +223,12 @@ export default function Properties() {
                     Tasar
                   </button>
                   {' · '}
-                  <button style={btnLink} onClick={() => setPublishing(p)}>
+                  <button style={btnLink} onClick={() => setPublishing({ property: p })}>
                     Publicar
+                  </button>
+                  {' · '}
+                  <button style={btnLink} onClick={() => setMakingReel(p)} disabled={p.photoUrls.length < 2} title={p.photoUrls.length < 2 ? 'Hacen falta al menos 2 fotos' : undefined}>
+                    Reel
                   </button>
                   {' · '}
                   <button style={btnLink} onClick={() => setEditing(p)}>
@@ -250,11 +259,27 @@ export default function Properties() {
         </div>
       )}
 
+      {makingReel !== null && (
+        <Modal title={`Crear reel: ${makingReel.title}`} onClose={() => setMakingReel(null)}>
+          <Suspense fallback={<p style={{ padding: 20 }}>Cargando…</p>}>
+            <ReelBuilder
+            property={makingReel}
+            onCancel={() => setMakingReel(null)}
+            onUse={(videoUrl) => {
+              setPublishing({ property: makingReel, videoUrl });
+              setMakingReel(null);
+            }}
+          />
+          </Suspense>
+        </Modal>
+      )}
+
       {publishing !== null && (
-        <Modal title={`Publicar en redes: ${publishing.title}`} onClose={() => setPublishing(null)}>
+        <Modal title={`Publicar en redes: ${publishing.property.title}`} onClose={() => setPublishing(null)}>
           <SocialPostForm
             post={null}
-            initialProperty={publishing}
+            initialProperty={publishing.property}
+            initialVideoUrl={publishing.videoUrl ?? null}
             configured={socialConfigured}
             onCancel={() => setPublishing(null)}
             onDone={(msg) => {
