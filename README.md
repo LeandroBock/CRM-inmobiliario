@@ -285,12 +285,14 @@ TikTok for Developers. TikTok también limita a ~15 publicaciones por día por c
    inmobiliaria y links a términos y política de privacidad.
 2. Agregar los productos **Login Kit** y **Content Posting API** (con *Direct Post*), y los permisos
    `user.info.basic` y `video.publish`.
-3. En Login Kit, **Redirect URI**: `https://<API>/integrations/tiktok/callback`
+3. Términos y privacidad: `https://<WEB>/terminos` y `https://<WEB>/privacidad` (páginas públicas del CRM;
+   el nombre y el email de contacto salen de `VITE_AGENCY_NAME` y `VITE_LEGAL_EMAIL` en crm-web).
+4. En Login Kit, **Redirect URI**: `https://<API>/integrations/tiktok/callback`
    (p. ej. `https://crm-api-grv3.onrender.com/integrations/tiktok/callback`).
-4. Mientras la app está en *sandbox*, agregar la cuenta de TikTok de la inmobiliaria como usuario de prueba.
-5. En la API: `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` y `TOKEN_ENCRYPTION_KEY` (la misma de Google, o una nueva:
+5. Mientras la app está en *sandbox*, agregar la cuenta de TikTok de la inmobiliaria como usuario de prueba.
+6. En la API: `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` y `TOKEN_ENCRYPTION_KEY` (la misma de Google, o una nueva:
    `openssl rand -base64 32`).
-6. En el CRM, un administrador: **Redes → Conectar TikTok**. El permiso se renueva solo (dura un año; si se revoca,
+7. En el CRM, un administrador: **Redes → Conectar TikTok**. El permiso se renueva solo (dura un año; si se revoca,
    el CRM lo avisa para reconectar).
 
 Al publicar en TikTok el CRM muestra la cuenta, pide elegir quién puede verlo (sin valor por defecto, como exige

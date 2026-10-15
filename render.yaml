@@ -108,6 +108,11 @@ services:
       # Dirección de la API, p. ej. https://crm-api.onrender.com. Se usa al construir: si cambia, hay que redesplegar la web.
       - key: VITE_API_URL
         sync: false
+      # Para /privacidad y /terminos (las piden TikTok y Meta). Opcionales: sin ellas dice "la inmobiliaria".
+      - key: VITE_AGENCY_NAME
+        sync: false
+      - key: VITE_LEGAL_EMAIL
+        sync: false
       - key: NODE_VERSION
         value: "22"
     # La web es una sola página: cualquier ruta muestra index.html
