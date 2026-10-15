@@ -52,6 +52,21 @@ const POST_SCHEMA: JsonSchema = {
   additionalProperties: false,
 };
 
+export interface ListingText {
+  title: string;
+  description: string;
+}
+
+const LISTING_SCHEMA: JsonSchema = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', description: 'Título del aviso (máx. 60 caracteres)' },
+    description: { type: 'string', description: 'Descripción del aviso en texto plano' },
+  },
+  required: ['title', 'description'],
+  additionalProperties: false,
+};
+
 const REEL_SCHEMA: JsonSchema = {
   type: 'object',
   properties: {
@@ -113,6 +128,25 @@ export class ContentService {
 
     const out = await this.llm.json<PostText>(BASE_SYSTEM, prompt, POST_SCHEMA);
     return { copy: out.copy.trim().slice(0, 2200), hashtags: cleanHashtags(out.hashtags) };
+  }
+
+  /**
+   * Título y descripción para portales (Zonaprop, Argenprop, MercadoLibre): texto plano, sin emojis, teléfonos,
+   * emails ni links (los portales los rechazan o los moderan).
+   */
+  async writeListing(opts: { propertyId: string; instructions?: string }): Promise<ListingText> {
+    const property = await this.properties.findOneOrFail({ where: { id: opts.propertyId } });
+    const prompt = [
+      'Escribí el aviso de esta propiedad para portales inmobiliarios (Zonaprop, Argenprop, MercadoLibre).',
+      'Título: hasta 60 caracteres, con tipo de propiedad, ambientes o dormitorios, operación y barrio. Sin mayúsculas sostenidas ni signos de exclamación.',
+      'Descripción: 120 a 250 palabras en texto plano, en párrafos cortos: primero lo más atractivo, después la distribución y las comodidades, y al final la ubicación. Sin emojis, sin teléfonos, sin emails, sin links y sin la dirección exacta. No inventes nada que no esté en los datos.',
+      `DATOS DE LA PROPIEDAD:\n${describeProperty(property)}`,
+      opts.instructions?.trim() ? `INDICACIONES DEL ASESOR: ${opts.instructions.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    const out = await this.llm.json<ListingText>(BASE_SYSTEM, prompt, LISTING_SCHEMA);
+    return { title: out.title.trim().slice(0, 70), description: out.description.trim().slice(0, 5000) };
   }
 
   /** Textos del reel (rótulo, título y un texto por foto), cortos para que entren en la pantalla del video. */

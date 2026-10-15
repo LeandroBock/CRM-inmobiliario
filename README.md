@@ -224,6 +224,14 @@ muestra solo barrio y ciudad; la dirección exacta es opcional. `POST /propertie
 Desde el chat de un lead, **📄 Mandar ficha de una propiedad** se la manda por WhatsApp como documento (primero
 aparecen las propiedades sugeridas para ese cliente). Rige la ventana de 24 h, como cualquier mensaje.
 
+## Cargar en portales (Zonaprop, Argenprop, MercadoLibre)
+
+Zonaprop y Argenprop no tienen API pública (la habilitan a pedido, con convenio), así que por ahora la carga es manual
+pero rápida: **Propiedades → Portales** muestra el título (≤ 60 caracteres, el límite de MercadoLibre) y la descripción
+en texto plano (sin emojis, teléfonos ni links), los datos en el orden de los formularios con un botón para copiar cada
+uno (en los numéricos copia solo el número) y descarga las fotos en un ZIP numerado (`GET /properties/:id/photos.zip`;
+01 = portada). Con Claude configurado, **✨ Mejorar título y descripción con IA** (`POST /social/ai/listing`).
+
 ## Fotos con IA (Cloudflare, gratis)
 
 En cualquier foto subida al CRM, **✨ IA** abre el editor: **Amueblar** (amoblamiento virtual de un ambiente vacío),

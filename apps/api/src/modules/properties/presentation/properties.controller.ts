@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile } from '@nestjs/common';
 import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, IsUrl, Matches, MaxLength, ValidateIf } from 'class-validator';
 import { MAX_SHEET_PHOTOS, PropertySheetService } from '../application/property-sheet.service';
+import { PhotosZipService } from '../application/photos-zip.service';
 import { PropertiesService } from '../application/properties.service';
 import { CreatePropertyDto, PropertyQuery, UpdatePropertyDto } from './property.dto';
 
@@ -22,6 +23,7 @@ export class PropertiesController {
   constructor(
     private readonly properties: PropertiesService,
     private readonly sheets: PropertySheetService,
+    private readonly photosZip: PhotosZipService,
   ) {}
 
   @Post()
@@ -53,6 +55,13 @@ export class PropertiesController {
   async sheet(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SheetDto) {
     const { pdf, fileName } = await this.sheets.build(id, dto);
     return new StreamableFile(pdf, { type: 'application/pdf', disposition: `attachment; filename="${fileName}"` });
+  }
+
+  /** Las fotos en un ZIP, numeradas en orden, para cargarlas en Zonaprop, Argenprop, MercadoLibre... */
+  @Get(':id/photos.zip')
+  async photosZipFile(@Param('id', ParseUUIDPipe) id: string) {
+    const { zip, fileName } = await this.photosZip.build(id);
+    return new StreamableFile(zip, { type: 'application/zip', disposition: `attachment; filename="${fileName}"` });
   }
 
   @Patch(':id')

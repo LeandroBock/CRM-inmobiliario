@@ -58,6 +58,11 @@ class AiReelDto {
   @IsOptional() @IsString() @MaxLength(500) instructions?: string;
 }
 
+class AiListingDto {
+  @IsUUID() propertyId: string;
+  @IsOptional() @IsString() @MaxLength(500) instructions?: string;
+}
+
 class PlatformOptionsDto {
   @IsOptional() @IsIn(['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR', 'SELF_ONLY']) privacyLevel?: string;
   @IsOptional() @IsBoolean() disableComment?: boolean;
@@ -192,6 +197,13 @@ export class SocialMediaController {
   @HttpCode(200)
   aiReel(@Body() dto: AiReelDto) {
     return this.content.writeReel(dto);
+  }
+
+  /** Título y descripción para portales inmobiliarios con IA. */
+  @Post('ai/listing')
+  @HttpCode(200)
+  aiListing(@Body() dto: AiListingDto) {
+    return this.content.writeListing(dto);
   }
 
   /** Genera un borrador con IA (necesita ANTHROPIC_API_KEY). */

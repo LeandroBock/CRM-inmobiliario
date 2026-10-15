@@ -1,5 +1,6 @@
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { writeFileSync } from 'node:fs';
+import { unzipSync } from 'fflate';
 import sharp from 'sharp';
 import { latin } from '../src/modules/properties/application/property-sheet.service';
 import { createTestApp, createUser, http, resetDb, TestUser } from './helpers';
@@ -95,6 +96,21 @@ describe('Ficha PDF de la propiedad', () => {
     await sheet(p.id, { brandColor: 'rojo' }).expect(400);
     await sheet(p.id, { photoUrls: Array(8).fill(urls[0]) }).expect(400);
     await sheet('00000000-0000-4000-8000-000000000000').expect(404);
+  });
+
+  it('ZIP con las fotos en orden; los links externos quedan anotados', async () => {
+    const urls = await photos(3);
+    const p = await property([urls[2], 'https://otro-sitio.com/x.jpg', urls[0]]);
+    const res = await http(app).get(`/properties/${p.id}/photos.zip`).set(user.auth).buffer(true).parse(binary).expect(200);
+    expect(res.headers['content-type']).toBe('application/zip');
+    expect(res.headers['content-disposition']).toBe('attachment; filename="fotos-depto-luminoso-con-balcon.zip"');
+    const files = unzipSync(new Uint8Array(res.body));
+    expect(Object.keys(files).sort()).toEqual(['01.jpg', '02.jpg', 'fotos-externas.txt']);
+    // 01 es la que estaba primera (urls[2], color #9c6)
+    const { dominant } = await sharp(Buffer.from(files['01.jpg'])).stats();
+    expect(dominant.g).toBeGreaterThan(dominant.r); // verde: #9c6
+    expect(dominant.r).toBeGreaterThan(dominant.b);
+    expect(new TextDecoder().decode(files['fotos-externas.txt'])).toContain('https://otro-sitio.com/x.jpg');
   });
 
   it('saca emojis y símbolos que la fuente del PDF no tiene', () => {

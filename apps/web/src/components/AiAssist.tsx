@@ -5,7 +5,7 @@ import { btnLink, btnSecondary, colors, input } from '../styles';
 
 /** Se consulta una sola vez por sesión si Claude está configurado en la API. */
 let configuredPromise: Promise<boolean> | null = null;
-function aiConfigured(): Promise<boolean> {
+export function aiConfigured(): Promise<boolean> {
   configuredPromise ??= apiFetch<{ configured: boolean }>('/social/ai')
     .then((r) => r.configured)
     .catch(() => {

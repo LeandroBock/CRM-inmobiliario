@@ -103,6 +103,17 @@ describe('Textos con IA (publicaciones y reels)', () => {
     }
   });
 
+  it('texto para portales: título y descripción en texto plano', async () => {
+    const property = await createProperty(app, user, 'Depto 2 amb. Centro');
+    llm.willReturn({ title: ' Departamento 2 ambientes en venta en Centro ', description: 'Luminoso departamento...' });
+    const res = await http(app).post('/social/ai/listing').set(user.auth).send({ propertyId: property.id, instructions: 'Para inversores' }).expect(200);
+    expect(res.body).toEqual({ title: 'Departamento 2 ambientes en venta en Centro', description: 'Luminoso departamento...' });
+    expect(llm.calls[0].prompt).toMatch(/portales/);
+    expect(llm.calls[0].prompt).toMatch(/Sin emojis, sin teléfonos/);
+    expect(llm.calls[0].prompt).toContain('Para inversores');
+    await http(app).post('/social/ai/listing').set(user.auth).send({ propertyId: 'x' }).expect(400);
+  });
+
   it('textos del reel: uno por foto, cortos', async () => {
     const property = await createProperty(app, user);
     llm.willReturn({ kicker: 'oportunidad', title: 'Tu primer depto en el Centro', captions: ['📍 Centro, Rosario', '2 ambientes', 'x'.repeat(100), 'sobra'] });

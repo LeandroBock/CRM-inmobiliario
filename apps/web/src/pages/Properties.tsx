@@ -12,6 +12,7 @@ import {
   type Property,
 } from '../api/properties';
 import Appraisal from '../components/Appraisal';
+import PortalKit from '../components/PortalKit';
 import PropertySheet from '../components/PropertySheet';
 import Modal from '../components/Modal';
 import SocialPostForm from '../components/SocialPostForm';
@@ -46,6 +47,8 @@ export default function Properties() {
   const [makingReel, setMakingReel] = useState<Property | null>(null);
   /** Ficha en PDF abierta. */
   const [sheetFor, setSheetFor] = useState<Property | null>(null);
+  /** Kit para cargar la propiedad a mano en Zonaprop, Argenprop o MercadoLibre. */
+  const [portalFor, setPortalFor] = useState<Property | null>(null);
   const [socialConfigured, setSocialConfigured] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -238,6 +241,10 @@ export default function Properties() {
                     Ficha
                   </button>
                   {' · '}
+                  <button style={btnLink} onClick={() => setPortalFor(p)} title="Textos, datos y fotos listos para Zonaprop, Argenprop y MercadoLibre">
+                    Portales
+                  </button>
+                  {' · '}
                   <button style={btnLink} onClick={() => setEditing(p)}>
                     Editar
                   </button>
@@ -264,6 +271,12 @@ export default function Properties() {
             Siguiente →
           </button>
         </div>
+      )}
+
+      {portalFor !== null && (
+        <Modal title={`Cargar en portales: ${portalFor.title}`} onClose={() => setPortalFor(null)}>
+          <PortalKit property={portalFor} onClose={() => setPortalFor(null)} />
+        </Modal>
       )}
 
       {sheetFor !== null && (
